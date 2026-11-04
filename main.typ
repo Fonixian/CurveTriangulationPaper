@@ -148,74 +148,94 @@
 
 = Bevezetés <intro>
 
-Munkám során ahhoz hogy a Bézier görbéket megjlenítsem a vonal primitívet cserélem le, ez alatt azt értem, hogy nem a grafikus API-k által kínált vonal primitíveket használnom. Például: GL_LINE_STRIP, D3DPT_LINESTRIP, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
-Az utobbira azért van szügség, mert a vonal primitíveken erős megkötések vannak, például a grafikus API-k nem garantálják, hogy a vonal szélessége megváltoztatható legyen, a DX11-ben nem is lehet megadni a széleségét és még nem is beszéltünk arról az estről, amikor mintázatot szeretnénk futtatni a görbe mentén. Valamint mintázatokat sem támogatnak alapból a grafikus API-k.
+// Munkám során ahhoz, hogy a Bézier görbéket megjlenítsem a vonal primitívet cserélem le, ez alatt azt értem, hogy nem a grafikus API-k által kínált vonal primitíveket használnom. Például: GL_LINE_STRIP, D3DPT_LINESTRIP, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
+// Az utobbira azért van szügség, mert a vonal primitíveken erős megkötések vannak, például a grafikus API-k nem garantálják, hogy a vonal szélessége megváltoztatható legyen, a DX11-ben nem is lehet megadni a széleségét és még nem is beszéltünk arról az estről, amikor mintázatot szeretnénk futtatni a görbe mentén. Valamint mintázatokat sem támogatnak alapból a grafikus API-k.
 
-Ez egy olyan probléma, amire több megoldás is létezik, de általában mindegyiknak megvan a saját hátránya vagy nem támogatja au összes funkciót, ami számomra szügséges.
+// Ez egy olyan probléma, amire több megoldás is létezik, de általában mindegyiknak megvan a saját hátránya vagy nem támogatja au összes funkciót, ami számomra szügséges.
 
 == Jelenlegi módszerek
 
-A jelenlegi módszereknél a következő szempontokat vizsgálom meg, ahhoz, hogy görbéket jelenítsek meg
+Háromdimenzios görbék megjelenítésére több módszert néztem meg. A módszereket három kategóriába sorotmam, amik a vonal primitív, rasterizációs és a geometria genereáláson alapuló módszerek. A jelenlegi módszereknél a következő szempontokat vizsgálom meg, ahhoz, hogy görbéket jelenítsek meg.
 - Távolságtól független vastagság, azaz a görbe vastagságát meg lehet adni pixelekben.
 - Változtatható vastagság, azaz meg lehet adni, hogy hány pixel legyen a vastagság.
 - Megadható mintázatok, azaz nem csak egy színből áll, hanem lehet szaggatott, pontozott görbét is megjeleníteni.
 - Működik térben, azaz nem csak egy síkban adható meg a görbe.
+- Portabilitás
 Vannak más feltételek is, mint a színek és átlátszóság kezelése, valamint az anti-aliasing és a teljesítmény, de ezekre csak néhány helyen fogok kitérni ebben a fejezetben.
 
 === Vonalprimitíven alapuló módszerek
 
-- glLineStipple, ezzel meg lehetett adni egy tizenhat bites bitmaskot és egy faktort, ami megadja a raszterizált mintázatot. Ennek a módszernek egy nagy hátránya az, hogy ez a legacy OpenGL fixed function pipeline része, amit már nem használnak. Az @vs_segment_curve ábrán látható, hogyan nézhetett ki.
-- VK_KHR_line_rasterization, gyakorlatilag a glLineStipple, de egy modern API része. CAD alkalmazásoknak lett hozzáadva bővítményként, ugyanúgy meg lehet adni egy bitmaskot és egy faktort, de hozzá még meg is lehet adni vonalraszterizációs algoritmust is. Egy nagy hátránya az, hogy nem minden eszközön van implementálva, vagy legalábbis nincsen teljesen implementálva lásd @amd_impl_table. Valamint az is egy probléma, hogy ez egy Vulkan-specifikus bővítmény.
+- glLineStipple, ezzel meg lehetett adni egy tizenhat bites bitmaskot és egy faktort, ami megadja a raszterizált mintázatot. Ennek a módszernek egy nagy hátránya az, hogy ez a legacy OpenGL fixed function pipeline része, amit már nem használnak. Az /*@vs_segment_curve*/ ábrán látható, hogyan nézhetett ki.
+- VK_KHR_line_rasterization, gyakorlatilag a glLineStipple, de egy modern API része. CAD alkalmazásoknak lett hozzáadva bővítményként, ugyanúgy meg lehet adni egy bitmaskot és egy faktort, de hozzá még meg is lehet adni vonalraszterizációs algoritmust is. Egy nagy hátránya az, hogy nem minden eszközön van implementálva, vagy legalábbis nincsen teljesen implementálva lásd /*@amd_impl_table*/. Valamint az is egy probléma, hogy ez egy Vulkan-specifikus bővítmény.
 
-#figure(
-  image("images/vk_segment_curve_combined.png",width:100%),
-  caption: [VK_KHR_line_rasterization (SmoothLine) használatával megjelenített szegmens és görbe.]
-) <vs_segment_curve>
+//#figure(
+//  image("images/vk_segment_curve_combined.png",width:100%),
+//  caption: [VK_KHR_line_rasterization (SmoothLine) használatával megjelenített szegmens és görbe.]
+//) <vs_segment_curve>
 
-#figure(
-  table(
-    columns: 2,
-    [Algoritmus], [Implementált],
-    [bresenhamLines], [Igen],
-    [rectangularLines], [Nem],
-    [smoothLines], [Nem],
-    [stippledBresenhamLines], [Igen],
-    [stippledRectangularLines], [Nem],
-    [stippledSmoothLines], [Nem]
-  ),
-  caption: [AMD Radeon(TM) 610M (2022) által támogatott algoritmusok],
-) <amd_impl_table>
+//#figure(
+//  table(
+//    columns: 2,
+//    [Algoritmus], [Implementált],
+//    [bresenhamLines], [Igen],
+//    [rectangularLines], [Nem],
+//    [smoothLines], [Nem],
+//    [stippledBresenhamLines], [Igen],
+//    [stippledRectangularLines], [Nem],
+//    [stippledSmoothLines], [Nem]
+//  ),
+//  caption: [AMD Radeon(TM) 610M (2022) által támogatott algoritmusok],
+//) <amd_impl_table>
 
-- Vertex és fragment shader, a legegyszerűbb megoldás, ha csak kiszámoljuk a vertex shaderben, hogy egy adott pontnak milyen pixelkoordinátái vannak, majd a fragment shaderben az interpolált értékből kiszámoljuk, hogy melyik fragmenteket dobjuk el. Lehet látni az ábrán @gl_segment_curve, hogy a mintázat nem megfelelő, mert a szegmensek hossza nem egyezik meg a mintázat hosszával. Ezt ki lehet küszöbölni azzal, hogy CPU-n kiszámoljuk az adott ponthoz tartozó ívhosszát a görbének, de ezt potenciálisan minden frame-ben ki kell számolnunk, mert a mintázat screen space, de a kamera mozoghat, de ha kiszámoljuk, akkor a @vs_segment_curve ábrához hasonló görbét kapunk.
+- Vertex és fragment shader, a legegyszerűbb megoldás, ha csak kiszámoljuk a vertex shaderben, hogy egy adott pontnak milyen pixelkoordinátái vannak, majd a fragment shaderben az interpolált értékből kiszámoljuk, hogy melyik fragmenteket dobjuk el. Lehet látni az ábrán /*@gl_segment_curve*/, hogy a mintázat nem megfelelő, mert a szegmensek hossza nem egyezik meg a mintázat hosszával. Ezt ki lehet küszöbölni azzal, hogy CPU-n kiszámoljuk az adott ponthoz tartozó ívhosszát a görbének, de ezt potenciálisan minden frame-ben ki kell számolnunk, mert a mintázat screen space, de a kamera mozoghat, de ha kiszámoljuk, akkor a /*@vs_segment_curve*/ ábrához hasonló görbét kapunk.
 
-#figure(
-  image("images/gl_segment_curve_combined.png",width:100%),
-  caption: [Vertex és fragment shader használatával megjelenített szegmens és görbe.]
-) <gl_segment_curve>
+//#figure(
+//  image("images/gl_segment_curve_combined.png",width:100%),
+//  caption: [Vertex és fragment shader használatával megjelenített szegmens és görbe.]
+//) <gl_segment_curve>
 
-Az @vs_segment_curve ábrán lehetett olyan hibát látni, hogy a szaggatások a görbén mintha rossz irányba állnának meg keresztezik egymást a görbületnél. Ez azért fordul elő, mert a görbe szakaszokból áll és a szakaszok egyenesek, amikre a szaggatásos mintázat merőleges.
+Az /*@vs_segment_curve*/ ábrán lehetett olyan hibát látni, hogy a szaggatások a görbén mintha rossz irányba állnának meg keresztezik egymást a görbületnél. Ez azért fordul elő, mert a görbe szakaszokból áll és a szakaszok egyenesek, amikre a szaggatásos mintázat merőleges.
 
 Valamint a vonalprimitíveknek van három nagy hátránya a görbék rajzolására, számomra.
 - Nem garantált, hogy tudunk vonalvastagságot megadni, mert az eszközfüggő, a DX11-ben egyszerűen nincsen metódusunk a vonalvastagság megadására.
 - A vertex és fragment shader szempontjából nincsen a vonalnak vastagsága, azaz tudunk adni értékeket, amik a hossz mentén interpolálódnak, de nem tudunk a szélesség mentén ugyanezt megadni. Ennek az eredménye az, hogy csak különböző szaggatásokat tudunk létrehozni, de nem tudjuk a görbe végét lekerekíteni.
-- A vastag vonalak által létrehozott solid görbe nem szép @line_solid_curve, mivel nem nyúlnak túl a szegmensek két pont között.
+- A vastag vonalak által létrehozott solid görbe nem szép /*@line_solid_curve*/, mivel nem nyúlnak túl a szegmensek két pont között.
 
-#figure(
-  image("images/vk_curve_thick_solid.png",width:80%),
-  caption: [Vastag görbe vonalprimitívekkel kirajzolva]
-) <line_solid_curve>
+//#figure(
+//  image("images/vk_curve_thick_solid.png",width:80%),
+//  caption: [Vastag görbe vonalprimitívekkel kirajzolva]
+//) <line_solid_curve>
 
 === Vektorgrafika
 
 Több interfész is van GPU által gyorsított vektorgrafika és ezáltal Bézier-görbék megjelenítésére is, például OpenVG és NV_path_rendering (OpenGL). Mivel ezeket SVG-k megjelenítésére készítették, ezért a görbék mindent tudnak, mint az SVG görbék. A hátrányuk az, hogy 2D-ben működnek, egy megoldás lenne az, hogy kiszámolom a pontokat a CPU-n, hogy hol legyenek a képernyőn, de ez a kontrollpontokkal megadott Bézier-görbének nem elég, mert az igaz, hogy a Bézier-görbék affin invariánsak, de a 3D-s alkalmazásokban használt perspektív vetítés nem affin, ezért vagy pontok sorozatát kell megadni, vagy addig kell a kettéválasztás algoritmussal több kisebb Bézier-görbére osztani, amíg elég kicsi nem lesz a hiba. Az utóbbi módszer CPU intenzív tud lenni, mert minden frame-ben újra kell számolni. Valamint ezek az interfészek nem használják a mélységet, hanem festő algoritmussal működnek.
 
-// TODO kép
+//#figure(
+//  image("images/nvpr_2d.png",width:80%),
+//  caption: [NV_path_rendering használatával elkészített 2D Bézier görbék]
+//) <nvpr_2d>
+
+//#figure(
+//  image("images/nvpr_3d.png",width:80%),
+//  caption: [NV_path_rendering használatával elkészített 3D Bézier görbék]
+//) <nvpr_3d>
+// TODO jobb ábra a hibás mélységekre.
 
 === Generált geometria
 
-Mivel a vonal primtívekkel nem lehet szép vestag görbét létrehozni, ezért nekünk kell elkészítenünk a gometriát.
+Mivel a grafikus Api-k által nyújott vonal primitívek nem elegendőek vastag görbék megjelenítésére, ezért manuálisan kell nekkem előállítani a görbét, de erre több módszer is létezik. Az utobbi módszereket lehet kettő kategóriába az egyik amely geometriával próbálja legjobban közelíteni a görbét. A másik csak közelíti a görbét és Pixel shader haszálatával éri el a görbe alakját, úgy hogy eldob fragmenteket. 
+
+Az egyik legegyszerűbb módszer a geometria shader haszálata, amivel a bejövő görbőnek két szomszédós pontjából elő lehet állítani egy négyszöget, majd a pixel shaderrel lekerekítem a sarkokat. Az utobbi módszernél lehet geometria shader helyett csak vertex shader használni, például a különböző grafikus API-k által kínált instanced rajzolás parancsok használatával, ahol "ugyanazt" a négyszöget rajzoljuk ki más más eltolásokkal.
+
+Valamint az utobbi módszernek egy másik változata, az hogy ahelyett hogy pixel shaderben kerekítenénk le a sarkokat. Ahelyet négyszögek helyett bonyolúltabb alakot használunk fel, egy kettő dimenziós kapszulát, ahol a végpontokban már lekerekítettek a görbe szakaszok vége.
+
+A kettő módszerrel olyan problémám van, hogy nem kezelik jól az átlátszóságot, mivel a két egymás meletti szegemense a görbének fedi egymást. Ezért a görbén megjelennek pontok, ahol kétszer adódik hozzá a görbe színe az alpha blending során. Valamint a görbéknél gyakran az antialiaszing alpha blendinggel történik, emiatt akkor is is meg tudnak jelenni artifactot ha a görbe nem átlátszó, ha antialisnguluk alpha blend használatával.
+
+Az utobbi modszerek hibályának a csökkentésére szokásos háromszögelni a szegmensekre osztott görbét. Ilyenkor el tudjuk kerülni hogy két egymást követő szegment egymást fedje. Ezt implementálja ImGui a CPU-n, valamint Rye Terrell a GPU-n, az utobbival az a probléma, hogy a háromszögelés egyszerű valamint nem minden esetet kezel le.
 
 
+//Mivel a vonal primtívekkel nem lehet szép vestag görbét létrehozni, ezért nekünk kell elkészítenünk a gometriát.
+//Rye Terrell által készített 
 
 
 // Jelenlegi módszerek előnyök hátrányok képek (forrás)
@@ -228,9 +248,18 @@ Mivel a vonal primtívekkel nem lehet szép vestag görbét létrehozni, ezért 
 //- http://artgrammer.blogspot.com/2011/07/drawing-polylines-by-tessellation.html
 //- Előző munkám
 
-== Bezier görbék
+== Bézier görbék
+// https://onlinelibrary.wiley.com/doi/10.1155/2013/171392
+// https://books.google.hu/books?id=YmQy799flPkC&pg=PA264&redir_esc=y#v=onepage&q&f=false
+// https://books.google.hu/books?id=TAYw3LEs5rgC&pg=PA404&redir_esc=y#v=onepage&q&f=false
 
-Miért Bezier görbéket használtam?
+
+A munkám során Bézier görbék megjelenítésével foglalkoztam, azon belül is a harmadfokú Bézier görbékkel. Ennek a döntésnek az az indoka, hogy a Bézier görbék a legerteljettebbek a különböző CAD, graphics design szoftverekben, valamnt az SVG specifikációjának is része a másod és harmadfokú Bézier görbék, valamint sok pontosorozatot interpoláló görbék is Bézier alapúak, például a Catmull-Rom spline, Hermitte spline, B-Spline stb. Valamint tetszőleges n-ed fokú polinom is átparaméterezhető n-ed fokú Bézier görbévé. Valamint sok jó tuladjonsággal jellemezhetőek a Bézier görbék.
+
+- Konvex boruk tulajdonság: A görbe pontjai a kontrolpontok által megadott konvex burokon belül vannak.
+- Affin invariancia: Ha a görbe kontrolpontjait affin transzfomációval eltranszformáljuk akkor azokbol kapott görbe megegyezik az eredeti görbének eltranszformált pontjaival.
+- Végpont interpoláció: A görbe kező és végpontja megegyezik az első és az utolsó kontrollpottal.
+- Bézier görbéken értelmezett a fokszámemelés művelet: Azaz n-ed fokú Bézier görbe felírható n+1-ed fokúval.
 
 == Görbe változatok
 
