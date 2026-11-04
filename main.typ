@@ -260,19 +260,47 @@ Az utóbbi módszerek hibáinak a csökkentésére szokásos háromszögelni a s
 // https://books.google.hu/books?id=TAYw3LEs5rgC&pg=PA404&redir_esc=y#v=onepage&q&f=false
 
 
-A munkám során Bézier görbék megjelenítésével foglalkoztam, azon belül is a harmadfokú Bézier görbékkel. Ennek a döntésnek az az indoka, hogy a Bézier görbék a legelterjedtebbek a különböző CAD, graphics design szoftverekben, valamint az SVG specifikációjának is része a másod- és harmadfokú Bézier görbék, valamint sok pontosorozatot interpoláló görbék is Bézier alapúak, például a Catmull-Rom spline, Hermite spline, B-Spline stb. Valamint tetszőleges n-ed fokú polinom is átparaméterezhető n-ed fokú Bézier görbévé. Valamint sok jó tulajdonsággal jellemezhetőek a Bézier görbék.
+Munkám során Bézier-görbék megjelenítésével foglalkozom, azon belül is a harmadfokú Bézier-görbékkel. Ezt a döntést három érv indokolja:
+- A Bézier-görbék a legelterjedtebbek a CAD- és a grafikai tervezőszoftverekben.
+- Az SVG specifikációja a másod- és a harmadfokú Bézier-görbéket tartalmazza.
+- Több más görbe is átírható Bézier-görbévé: tetszőleges n-ed fokú polinom felírható n-ed fokú Bézier-görbeként, a harmadfokú Catmull-Rom spline, Hermite spline és B-spline szakaszai pedig pontosan megegyeznek egy-egy harmadfokú Bézier-görbével.
 
-- Konvex burok tulajdonság: A görbe pontjai a kontrollpontok által megadott konvex burokon belül vannak.
-- Affin invariancia: Ha a görbe kontrollpontjait affin transzformációval eltranszformáljuk, akkor azokból kapott görbe megegyezik az eredeti görbének eltranszformált pontjaival.
-- Végpont interpoláció: A görbe kezdő és végpontja megegyezik az első és az utolsó kontrollponttal.
-- Bézier görbéken értelmezett a fokszámemelés művelet: Azaz n-ed fokú Bézier görbe felírható n+1-ed fokúval.
+A Bézier-görbéknek további hasznos tulajdonságaik is vannak:
+- Konvex burok tulajdonság: a görbe minden pontja a kontrollpontok konvex burkán belül van.
+- Affin invariancia: affin transzformáció után a görbe megegyezik a transzformált kontrollpontokból kapott görbével.
+- Végpont-interpoláció: a görbe kezdőpontja az első, végpontja az utolsó kontrollponttal egyezik meg.
+- Fokszámemelés: egy n-ed fokú Bézier-görbe pontosan felírható n+1-ed fokú Bézier-görbeként.
+
+A fokszámemelés miatt elég a harmadfokú Bézier-görbék megjelenítését megvalósítanom: a lineáris és a másodfokú görbét harmadfokú alakra írom át, és ugyanúgy rajzolom ki.
+
+```cpp
+std::array<Vec3, 4> LinearToCubic(Vec3 p0, Vec3 p1) {
+    return {
+        p0,
+        (2.0 * p0 + p1) / 3.0,
+        (p0 + 2.0 * p1) / 3.0,
+        p1,
+    };
+}
+
+std::array<Vec3, 4> QuadraticToCubic(Vec3 p0, Vec3 p1, Vec3 p2) {
+    return {
+        p0,
+        (p0 + 2.0 * p1) / 3.0,
+        (2.0 * p1 + p2) / 3.0,
+        p2,
+    };
+}
+```
 
 == Görbe változatok
 
-Miért van több? Mi a különbség?
-- Solid
-- Dotted
-- Patterned
+Három görbe típust különbözetek meg kirajzolás szempontjából, Solid, Dotted és Patterned. Mind a háromnál adott a görbe végeinél a kupakok (Round, Square, Butt, Triangle In, Triangle Out), az interpolálandó színek, szélesség, valamint az hogy csatlakozzanak-e az elöző görbéhez.
+- Solid: A görbének csak kupakjai vannak.
+- Dottted: Megadhatóak, hogy milyen távol legyenek egymástol a pontok és egy pont a kettő megadott kupakból áll.
+- Patterned: A görbét szegmensekre osztom és a szegmenseknek adok kupakokat.
+
+A görbe változatokra azért volt szügségem, mert minimalizálni szeretném az elvégzett munkát. Páldául a Patterned görbénél szügséges nekem a görbe ívhossza de a Solid-nál nincs rá szükségem. Valamint a Dotted görbénél nincs szügség a görbe előállítására mivel elég csak kiszámolni a mintázatok helyét és négyszögeket rajzolni.
 
 = Geometria Generálás
 
