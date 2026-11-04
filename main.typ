@@ -153,6 +153,70 @@
 
 // Ez egy olyan probléma, amire több megoldás is létezik, de általában mindegyiknak megvan a saját hátránya vagy nem támogatja az összes funkciót, ami számomra szükséges.
 
+== Bézier-görbék
+// https://onlinelibrary.wiley.com/doi/10.1155/2013/171392
+// https://books.google.hu/books?id=YmQy799flPkC&pg=PA264&redir_esc=y#v=onepage&q&f=false
+// https://books.google.hu/books?id=TAYw3LEs5rgC&pg=PA404&redir_esc=y#v=onepage&q&f=false
+
+Egy $n$-ed fokú Bézier-görbét $n+1$ kontrollponttal adok meg: $bold(P)_0, dots, bold(P)_n$. A görbe pontjait a $t in [0, 1]$ paraméterrel számolom:
+
+$ bold(B)(t) = sum_(i=0)^n b_(i,n)(t) bold(P)_i, quad b_(i,n)(t) = binom(n, i) t^i (1-t)^(n-i). $
+
+A $b_(i,n)$ függvények a Bernstein-polinomok. Minden $t$ értéknél nemnegatívak, és az összegük egy, ezért a görbe minden pontja a kontrollpontok súlyozott átlaga. Ebből következik a konvex burok tulajdonság is.
+
+Négy kontrollponttal adom meg a harmadfokú görbét:
+
+$ bold(B)(t) = (1-t)^3 bold(P)_0 + 3(1-t)^2 t bold(P)_1 + 3(1-t) t^2 bold(P)_2 + t^3 bold(P)_3. $
+
+Ugyanez mátrixalakban, ami programkódban is tömören kiértékelhető:
+
+$ bold(B)(t) = mat(1, t, t^2, t^3) mat(1, 0, 0, 0; -3, 3, 0, 0; 3, -6, 3, 0; -1, 3, -3, 1) vec(bold(P)_0, bold(P)_1, bold(P)_2, bold(P)_3). $
+
+A de Casteljau-algoritmus lineáris interpolációk sorozatával számolja ki ugyanezt a pontot. Kezdetben $bold(P)_i^((0)) = bold(P)_i$, majd
+
+$ bold(P)_i^((k)) = (1-t) bold(P)_i^((k-1)) + t bold(P)_(i+1)^((k-1)), $
+
+és a görbe pontja $bold(B)(t) = bold(P)_0^((n))$. A közbenső pontok a görbét a $t$ helyen két Bézier-görbére osztják, és ezek kontrollpontjai éppen a $bold(P)_0^((k))$, illetve a $bold(P)_k^((n-k))$ pontok.
+
+A harmadfokú görbe deriváltja:
+
+$ bold(B)'(t) = 3 [(1-t)^2 (bold(P)_1 - bold(P)_0) + 2(1-t)t (bold(P)_2 - bold(P)_1) + t^2 (bold(P)_3 - bold(P)_2)]. $
+
+A végpontokban ez $bold(B)'(0) = 3(bold(P)_1 - bold(P)_0)$ és $bold(B)'(1) = 3(bold(P)_3 - bold(P)_2)$, vagyis a görbe a szomszédos kontrollpont felé indul, illetve onnan érkezik.
+
+Munkám során Bézier-görbék megjelenítésével foglalkozom, azon belül is a harmadfokú Bézier-görbékkel. Ezt a döntést három érv indokolja:
+- A Bézier-görbék a legelterjedtebbek a CAD- és a grafikai tervezőszoftverekben.
+- Az SVG specifikációja a másod- és a harmadfokú Bézier-görbéket tartalmazza.
+- Több más görbe is átírható Bézier-görbévé: tetszőleges n-ed fokú polinom felírható n-ed fokú Bézier-görbeként, a harmadfokú Catmull-Rom spline, Hermite spline és B-spline szakaszai pedig pontosan megegyeznek egy-egy harmadfokú Bézier-görbével.
+
+A Bézier-görbéknek további hasznos tulajdonságaik is vannak:
+- Konvex burok tulajdonság: a görbe minden pontja a kontrollpontok konvex burkán belül van.
+- Affin invariancia: affin transzformáció után a görbe megegyezik a transzformált kontrollpontokból kapott görbével.
+- Végpont-interpoláció: a görbe kezdőpontja az első, végpontja az utolsó kontrollponttal egyezik meg.
+- Fokszámemelés: egy n-ed fokú Bézier-görbe pontosan felírható n+1-ed fokú Bézier-görbeként.
+
+A fokszámemelés miatt elég a harmadfokú Bézier-görbék megjelenítését megvalósítanom: a lineáris és a másodfokú görbét harmadfokú alakra írom át, és ugyanúgy rajzolom ki.
+
+```cpp
+std::array<Vec3, 4> LinearToCubic(Vec3 p0, Vec3 p1) {
+    return {
+        p0,
+        (2.0 * p0 + p1) / 3.0,
+        (p0 + 2.0 * p1) / 3.0,
+        p1,
+    };
+}
+
+std::array<Vec3, 4> QuadraticToCubic(Vec3 p0, Vec3 p1, Vec3 p2) {
+    return {
+        p0,
+        (p0 + 2.0 * p1) / 3.0,
+        (2.0 * p1 + p2) / 3.0,
+        p2,
+    };
+}
+```
+
 == Jelenlegi módszerek
 
 Háromdimenziós görbék megjelenítésére több módszert néztem meg. A módszereket három kategóriába soroltam, amik a vonalprimitív, SVG és a geometria generáláson alapuló módszerek. A jelenlegi módszereknél a következő szempontokat vizsgálom meg, ahhoz, hogy görbéket jelenítsek meg.
@@ -253,45 +317,6 @@ Az utóbbi módszerek hibáinak a csökkentésére szokásos háromszögelni a s
 //- https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects///chapter-25-rendering-vector-art-gpu
 //- http://artgrammer.blogspot.com/2011/07/drawing-polylines-by-tessellation.html
 //- Előző munkám
-
-== Bézier görbék
-// https://onlinelibrary.wiley.com/doi/10.1155/2013/171392
-// https://books.google.hu/books?id=YmQy799flPkC&pg=PA264&redir_esc=y#v=onepage&q&f=false
-// https://books.google.hu/books?id=TAYw3LEs5rgC&pg=PA404&redir_esc=y#v=onepage&q&f=false
-
-
-Munkám során Bézier-görbék megjelenítésével foglalkozom, azon belül is a harmadfokú Bézier-görbékkel. Ezt a döntést három érv indokolja:
-- A Bézier-görbék a legelterjedtebbek a CAD- és a grafikai tervezőszoftverekben.
-- Az SVG specifikációja a másod- és a harmadfokú Bézier-görbéket tartalmazza.
-- Több más görbe is átírható Bézier-görbévé: tetszőleges n-ed fokú polinom felírható n-ed fokú Bézier-görbeként, a harmadfokú Catmull-Rom spline, Hermite spline és B-spline szakaszai pedig pontosan megegyeznek egy-egy harmadfokú Bézier-görbével.
-
-A Bézier-görbéknek további hasznos tulajdonságaik is vannak:
-- Konvex burok tulajdonság: a görbe minden pontja a kontrollpontok konvex burkán belül van.
-- Affin invariancia: affin transzformáció után a görbe megegyezik a transzformált kontrollpontokból kapott görbével.
-- Végpont-interpoláció: a görbe kezdőpontja az első, végpontja az utolsó kontrollponttal egyezik meg.
-- Fokszámemelés: egy n-ed fokú Bézier-görbe pontosan felírható n+1-ed fokú Bézier-görbeként.
-
-A fokszámemelés miatt elég a harmadfokú Bézier-görbék megjelenítését megvalósítanom: a lineáris és a másodfokú görbét harmadfokú alakra írom át, és ugyanúgy rajzolom ki.
-
-```cpp
-std::array<Vec3, 4> LinearToCubic(Vec3 p0, Vec3 p1) {
-    return {
-        p0,
-        (2.0 * p0 + p1) / 3.0,
-        (p0 + 2.0 * p1) / 3.0,
-        p1,
-    };
-}
-
-std::array<Vec3, 4> QuadraticToCubic(Vec3 p0, Vec3 p1, Vec3 p2) {
-    return {
-        p0,
-        (p0 + 2.0 * p1) / 3.0,
-        (2.0 * p1 + p2) / 3.0,
-        p2,
-    };
-}
-```
 
 == Görbe változatok
 
