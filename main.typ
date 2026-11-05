@@ -168,32 +168,32 @@ Négy kontrollponttal adom meg a harmadfokú görbét:
 
 $ bold(B)(t) = (1-t)^3 bold(P)_0 + 3(1-t)^2 t bold(P)_1 + 3(1-t) t^2 bold(P)_2 + t^3 bold(P)_3. $
 
-Ugyanez mátrixalakban, ami programkódban is tömören kiértékelhető:
+Ugyanez mátrixalakban, amit programkódban is tömören ki tudok értékelni:
 
 $ bold(B)(t) = mat(1, t, t^2, t^3) mat(1, 0, 0, 0; -3, 3, 0, 0; 3, -6, 3, 0; -1, 3, -3, 1) vec(bold(P)_0, bold(P)_1, bold(P)_2, bold(P)_3). $
 
-A de Casteljau-algoritmus lineáris interpolációk sorozatával számolja ki ugyanezt a pontot. Kezdetben $bold(P)_i^((0)) = bold(P)_i$, majd
+A de Casteljau-algoritmussal lineáris interpolációk sorozatával számolom ki ugyanezt a pontot. Kezdetben $bold(P)_i^((0)) = bold(P)_i$, majd
 
 $ bold(P)_i^((k)) = (1-t) bold(P)_i^((k-1)) + t bold(P)_(i+1)^((k-1)), $
 
-és a görbe pontja $bold(B)(t) = bold(P)_0^((n))$. A közbenső pontok a görbét a $t$ helyen két Bézier-görbére osztják, és ezek kontrollpontjai éppen a $bold(P)_0^((k))$, illetve a $bold(P)_k^((n-k))$ pontok.
+és a görbe pontja $bold(B)(t) = bold(P)_0^((n))$. A közbenső pontokkal a görbét a $t$ helyen két Bézier-görbére oszthatom, és ezek kontrollpontjai éppen a $bold(P)_0^((k))$, illetve a $bold(P)_k^((n-k))$ pontok.
 
 A harmadfokú görbe deriváltja:
 
 $ bold(B)'(t) = 3 [(1-t)^2 (bold(P)_1 - bold(P)_0) + 2(1-t)t (bold(P)_2 - bold(P)_1) + t^2 (bold(P)_3 - bold(P)_2)]. $
 
-A végpontokban ez $bold(B)'(0) = 3(bold(P)_1 - bold(P)_0)$ és $bold(B)'(1) = 3(bold(P)_3 - bold(P)_2)$, vagyis a görbe a szomszédos kontrollpont felé indul, illetve onnan érkezik.
+A végpontokban ez $bold(B)'(0) = 3(bold(P)_1 - bold(P)_0)$ és $bold(B)'(1) = 3(bold(P)_3 - bold(P)_2)$, vagyis a görbe érintője a végpontokban a szomszédos kontrollponton halad át.
 
-Munkám során Bézier-görbék megjelenítésével foglalkozom, azon belül is a harmadfokú Bézier-görbékkel. Ezt a döntést három érv indokolja:
+Munkám során Bézier-görbék megjelenítésével foglalkozom, azon belül is a harmadfokú Bézier-görbékkel. Ezt a döntést három érvvel indokolom:
 - A Bézier-görbék a legelterjedtebbek a CAD- és a grafikai tervezőszoftverekben.
 - Az SVG specifikációja a másod- és a harmadfokú Bézier-görbéket tartalmazza.
-- Több más görbe is átírható Bézier-görbévé: tetszőleges n-ed fokú polinom felírható n-ed fokú Bézier-görbeként, a harmadfokú Catmull-Rom spline, Hermite spline és B-spline szakaszai pedig pontosan megegyeznek egy-egy harmadfokú Bézier-görbével.
+- Több más görbét is át tudok írni Bézier-görbévé: tetszőleges n-ed fokú polinomot fel tudok írni n-ed fokú Bézier-görbeként, a harmadfokú Catmull-Rom spline, Hermite spline és B-spline szakaszai pedig pontosan megegyeznek egy-egy harmadfokú Bézier-görbével.
 
 A Bézier-görbéknek további hasznos tulajdonságaik is vannak:
 - Konvex burok tulajdonság: a görbe minden pontja a kontrollpontok konvex burkán belül van.
-- Affin invariancia: affin transzformáció után a görbe megegyezik a transzformált kontrollpontokból kapott görbével.
+- Affin invariancia: affin transzformáció után a görbe megegyezik azzal a görbével, amelyet a transzformált kontrollpontokból építek fel.
 - Végpont-interpoláció: a görbe kezdőpontja az első, végpontja az utolsó kontrollponttal egyezik meg.
-- Fokszámemelés: egy n-ed fokú Bézier-görbe pontosan felírható n+1-ed fokú Bézier-görbeként.
+- Fokszámemelés: egy n-ed fokú Bézier-görbét pontosan fel tudok írni n+1-ed fokú Bézier-görbeként.
 
 A fokszámemelés miatt elég a harmadfokú Bézier-görbék megjelenítését megvalósítanom: a lineáris és a másodfokú görbét harmadfokú alakra írom át, és ugyanúgy rajzolom ki.
 
@@ -219,20 +219,20 @@ std::array<Vec3, 4> QuadraticToCubic(Vec3 p0, Vec3 p1, Vec3 p2) {
 
 == Jelenlegi módszerek
 
-Háromdimenziós görbék megjelenítésére több módszert néztem meg. A módszereket három kategóriába soroltam, amik a vonalprimitív, SVG és a geometria generáláson alapuló módszerek. A jelenlegi módszereknél a következő szempontokat vizsgálom meg, ahhoz, hogy görbéket jelenítsek meg.
-- Távolságtól független vastagság, azaz a görbe vastagságát meg lehet adni pixelekben.
-- Változtatható vastagság, azaz meg lehet adni, hogy hány pixel legyen a vastagság.
-- Megadható mintázatok, azaz nem csak egy színből áll, hanem lehet szaggatott, pontozott görbét is megjeleníteni.
-- Működik térben, azaz nem csak egy síkban adható meg a görbe.
+Háromdimenziós görbék megjelenítésére több módszert megvizsgáltam, és három kategóriába soroltam őket: vonalprimitívre, vektorgrafikára és generált geometriára épülő módszerek. Mindegyiknél a következő szempontokat vizsgálom:
+- Távolságtól független vastagság, azaz a görbe vastagságát pixelekben adhatom meg.
+- Változtatható vastagság, azaz a vastagság értékét módosíthatom.
+- Mintázatok támogatása, azaz a görbe nem csak egy színből áll, hanem szaggatott vagy pontozott görbét is megjeleníthetek.
+- Térbeli használat, azaz a görbét nem csak egy síkban adhatom meg.
 - Portabilitás
-Vannak más feltételek is, mint a színek és átlátszóság kezelése, valamint az anti-aliasing és a teljesítmény, de ezekre csak néhány helyen fogok kitérni ebben a fejezetben.
+Más szempontok is vannak, például a színek és az átlátszóság kezelése, az anti-aliasing és a teljesítmény, de ezekre csak néhány helyen térek ki ebben a fejezetben.
 
 === Vonalprimitíven alapuló módszerek
 
-A vonalprimitív egyenes szakaszokat rajzol: ilyen például a `GL_LINE_STRIP`, a `D3DPT_LINESTRIP` és a `VK_PRIMITIVE_TOPOLOGY_LINE_STRIP`. A Bézier-görbét ezért pontokban értékelem ki, és a pontokat vonalprimitívvel kötöm össze. A kapott törtvonal annál jobban közelíti a görbét, minél több pontban értékelem ki.
+Vonalprimitívvel egyenes szakaszokat rajzolhatok: ilyen például a `GL_LINE_STRIP`, a `D3DPT_LINESTRIP` és a `VK_PRIMITIVE_TOPOLOGY_LINE_STRIP`. A Bézier-görbét ezért pontokban értékelem ki, és a pontokat vonalprimitívvel kötöm össze. A kapott törtvonal annál pontosabban közelíti a görbét, minél több pontban értékelem ki.
 
-- `glLineStipple`: tizenhat bites bitmaszkot és egy faktort fogad, és ebből számolja a raszterizált mintázatot. Nagy hátránya, hogy a legacy OpenGL fixed function pipeline része, amelyet a mai alkalmazások már nem használnak. Az /*@vs_segment_curve*/ ábrán látható, hogyan néz ki az eredmény.
-- `VK_KHR_line_rasterization`: gyakorlatilag a `glLineStipple` utódja egy modern API-ban. A bővítmény elsősorban a CAD-alkalmazások igényeit szolgálja. Ugyanúgy bitmaszkot és faktort fogad, emellett a vonalraszterizációs algoritmust is kiválaszthatom. Nagy hátránya, hogy nem minden eszköz implementálja, vagy nem teljesen, lásd /*@amd_impl_table*/. Emellett ez egy Vulkan specifikus bővítmény.
+- `glLineStipple`: tizenhat bites bitmaszkkal és egy faktorral adom meg a raszterizált mintázatot. Nagy hátránya, hogy a legacy OpenGL fixed function pipeline része, amelyet a mai alkalmazások már nem használnak. Az /*@vs_segment_curve*/ ábrán látható, hogyan néz ki az eredmény.
+- `VK_KHR_line_rasterization`: gyakorlatilag a `glLineStipple` utódja egy modern API-ban. A bővítményt elsősorban CAD-alkalmazásokban használják. Ugyanúgy bitmaszkkal és faktorral adom meg a mintázatot, emellett a vonalraszterizációs algoritmust is kiválaszthatom. Nagy hátránya, hogy nem minden eszköz implementálja, vagy nem teljesen, lásd /*@amd_impl_table*/. Emellett ez egy Vulkan-specifikus bővítmény.
 
 //#figure(
 //  image("images/vk_segment_curve_combined.png",width:100%),
@@ -263,9 +263,9 @@ A vonalprimitív egyenes szakaszokat rajzol: ilyen például a `GL_LINE_STRIP`, 
 Az /*@vs_segment_curve*/ ábrán olyan hiba is látszik, hogy a szaggatások a görbületnél rossz irányba állnak, és keresztezik egymást. Ez azért történik, mert a görbe egyenes szakaszokból áll, és a szaggatásos mintázat merőleges ezekre a szakaszokra.
 
 Összefoglalva, a vonalprimitíveknek három nagy hátránya van a görbék rajzolásában:
-- A vonalvastagság nem garantált. OpenGL core profilban az 1-nél nagyobb vastagság nem garantált, Vulkanban a vastag vonal a választható `wideLines` funkció, a DX11-ben pedig egyáltalán nincs vonalvastagság.
+- A vonalvastagság nem biztosított: OpenGL core profilban az 1-nél nagyobb vastagság nem biztos, hogy működik, Vulkanban a vastag vonalhoz a választható `wideLines` funkcióra van szükség, a DX11-ben pedig egyáltalán nem adhatok meg vonalvastagságot.
 - A vertex és a fragment shader szempontjából a vonalnak nincs vastagsága. A vonal hossza mentén interpolált értékeket adhatok meg, a szélesség mentén nem. Ezért csak különböző szaggatásokat hozhatok létre, a görbe végét viszont nem tudom lekerekíteni.
-- A vastag vonalakból összeállított solid görbe nem szép /*@line_solid_curve*/, mert a szegmensek a két végpontjukon túl nem nyúlnak ki, ezért az illesztéseknél rések maradnak.
+- Ha vastag vonalakból állítom össze a solid görbét, az nem szép /*@line_solid_curve*/, mert a szegmenseket a két végpontjukon túl nem tudom meghosszabbítani, ezért az illesztéseknél rések maradnak. Ha szegmens végpontokat eltolom, akkor a sarkok nyúlnak túl a görbén.
 
 //#figure(
 //  image("images/vk_curve_thick_solid.png",width:80%),
@@ -289,13 +289,13 @@ Az /*@vs_segment_curve*/ ábrán olyan hiba is látszik, hogy a szaggatások a g
 
 === Vektorgrafika
 
-Több interfész létezik GPU-val gyorsított vektorgrafikára, így Bézier-görbék megjelenítésére is, például az OpenVG és az NV_path_rendering. Ezek az interfészek SVG-útvonalak megjelenítésére szolgálnak, ezért az SVG-útvonalak teljes eszköztárát támogatják. Az SVG-ben a `stroke-dasharray` attribútummal szaggatott vagy pontozott vonalat adhatok meg: a `16 10` érték például 16 egység hosszú szakaszokat és 10 egység hosszú réseket rajzol, a `0 10` érték pedig kerek vonalvégek (`stroke-linecap="round"`) mellett pontokat. Egyetlen útvonalba több Bézier-görbét is felfűzhetek (`C` és `S` parancsok), és a mintázat ilyenkor az illesztéseken át folyamatosan halad tovább az útvonal ívhossza mentén.
+Több interfész létezik GPU-val gyorsított vektorgrafikára, így Bézier-görbék megjelenítésére is, például az OpenVG és az NV_path_rendering. Ezekkel SVG-útvonalakat jeleníthetek meg, ezért az SVG-útvonalak teljes eszköztárát használhatom. Az SVG-ben a `stroke-dasharray` attribútummal szaggatott vagy pontozott vonalat adhatok meg: a `16 10` értékkel például 16 egység hosszú szakaszokat és 10 egység hosszú réseket kapok, a `0 10` értékkel pedig kerek vonalvégek (`stroke-linecap="round"`) mellett pontokat. Egyetlen útvonalba több Bézier-görbét is felfűzhetek (`C` és `S` parancsok), és a mintázat ilyenkor az útvonal ívhossza mentén az illesztéseknél is folyamatos marad.
 
-Hátrányuk, hogy csak kétdimenziós megjelenítésre alkalmasak. Megkerülhetném ezt úgy, hogy a CPU-n kiszámolom a kontrollpontok képernyőkoordinátáit, de ez Bézier-görbéknél nem elég. A Bézier-görbék ugyan affin invariánsak, a 3D-s alkalmazások perspektív vetítése viszont nem affin. Vetítés után racionális Bézier-görbe kontrollpontjait kapom meg, amelyet ezek az interfészek nem támogatnak. Ezért két lehetőségem marad, pontok sorozataként adom meg a görbét, vagy de Casteljau-algoritmussal addig osztom kisebb Bézier-görbékre, amíg a hiba elég kicsi nem lesz. Az utóbbi módszerek sok CPU-időt igényelnek, mert minden képkockánál újra kell számolnom.
+Hátrányuk, hogy csak kétdimenziós megjelenítésre alkalmasak. Megkerülhetném ezt úgy, hogy a CPU-n kiszámolom a kontrollpontok képernyőkoordinátáit, de ez Bézier-görbéknél nem elég. A Bézier-görbék ugyan affin invariánsak, a 3D-s alkalmazások perspektív vetítése viszont nem affin. Vetítés után racionális Bézier-görbét kapok, amelyet ezekkel az interfészekkel nem tudok megjeleníteni. Ezért két lehetőségem marad: pontok sorozataként adom meg a görbét, vagy de Casteljau-algoritmussal addig osztom kisebb Bézier-görbékre, amíg a hiba elég kicsi nem lesz. Mindkét módszernél sok CPU-időt használok fel, mert minden képkockánál újra kell számolnom.
 
-Emellett ezek az interfészek az ábra elemeit festőalgoritmussal rajzolják ki, ezért nem használnak mélységet, és nem kezelik azt az esetet, amikor két görbe takarja egymást. Az NV_path_rendering kezeli a mélységet, de ez az ábra síkjának mélységére vonatkozik, nem az benne lévő elemekre.
+Emellett ezekkel az interfészekkel az ábra elemeit festőalgoritmussal rajzolom ki, ezért nem tudok mélységet használni, és nem tudom kezelni azt az esetet, amikor két görbe takarja egymást. Az NV_path_rendering támogatja a mélységet, de az az ábra síkjának mélységére vonatkozik, nem a benne lévő elemekére.
 
-Ezeknek az interfészeknek egy másik problémája, hogy nem optimalizáltak változó geometria megjelenítésére. Affin transzformációkat, például forgatást és eltolást minimális költséggel végrehajthatok rajtuk. A kontrollpontok módosítása viszont jelentős költséggel jár.
+Ezeknél az interfészeknél egy másik probléma, hogy változó geometria megjelenítésére nem alkalmasak. Affin transzformációkat, például forgatást és eltolást minimális költséggel hajthatok végre rajtuk. A kontrollpontok módosítása viszont jelentős költséget jelent.
 
 //#figure(
 //  image("images/nvpr_2d.png",width:80%),
@@ -310,15 +310,15 @@ Ezeknek az interfészeknek egy másik problémája, hogy nem optimalizáltak vá
 
 === Generált geometria
 
-Mivel a grafikus API-k által nyújtott vonalprimitívek nem elegendőek vastag görbék megjelenítésére, ezért manuálisan kell nekem előállítani a görbét, de erre több módszer is létezik. Az utóbbi módszereket lehet kettő kategóriába az egyik amely geometriával próbálja legjobban közelíteni a görbét. A másik csak közelíti a görbét és pixel shader használatával éri el a görbe alakját, úgy, hogy eldob fragmenteket. 
+Mivel a grafikus API-k vonalprimitívei nem elegendők vastag görbék megjelenítésére, a görbét magamnak kell előállítanom, és erre több módszer is létezik. Ezeket két kategóriába sorolom: az egyik módszer a geometriával közelíti a lehető legjobban a görbe alakját, a másik csak közelíti a görbét, és a görbe alakját a pixel shaderben, fragmentek eldobásával alakítom ki.
 
-Az egyik legegyszerűbb módszer a geometria shader használata, amivel a bejövő görbének két szomszédos pontjából elő lehet állítani egy négyszöget, majd a pixel shaderrel lekerekítem a sarkokat. Az utóbbi módszernél lehet geometria shader helyett csak vertex shader használni, például a különböző grafikus API-k által kínált instanced rajzolás parancsok használatával, ahol "ugyanazt" a négyszöget rajzoljuk ki más más eltolásokkal.
+Az egyik legegyszerűbb módszer a geometria shader használata: a bejövő görbe két szomszédos pontjából egy négyszöget állítok elő, majd a pixel shaderben lekerekítem a sarkokat. Ennél a módszernél geometria shader helyett csak vertex shadert is használhatok, például az API-k instanced rajzolási parancsaival, ahol "ugyanazt" a négyszöget rajzolom ki különböző eltolásokkal.
 
-Valamint az utóbbi módszernek egy másik változata, az, hogy ahelyett, hogy pixel shaderben kerekítenénk le a sarkokat. Ahelyett négyszögek helyett bonyolultabb alakot használunk fel, egy kétdimenziós kapszulát, ahol a végpontokban már lekerekítettek a görbe szakaszok vége.
+Ennek a módszernek egy másik változata, hogy a sarkokat nem a pixel shaderben kerekítem le, hanem négyszög helyett bonyolultabb alakot, mondjuk egy kétdimenziós kapszulát használok, amelynek mindkét vége félkör alakú.
 
-A két módszerrel olyan problémám van, hogy nem kezelik jól az átlátszóságot, mivel a két egymás melletti szegmense a görbének fedi egymást. Ezért a görbén megjelennek pontok, ahol kétszer adódik hozzá a görbe színe az alpha blending során. Valamint a görbéknél gyakran az anti-aliasing alpha blendinggel történik, emiatt akkor is meg tudnak jelenni artifactok, ha a görbe nem átlátszó, ha anti-aliasingoljuk alpha blend használatával.
+A két módszerrel az a problémám, hogy az átlátszóságot nem tudom jól kezelni, mert a görbe két szomszédos szegmense fedi egymást. Ezért a görbén olyan pontok jelennek meg, ahol az alpha blending során kétszer adom hozzá a görbe színét. Emellett a görbéknél gyakran alpha blendinggel valósítom meg az anti-aliasingot, ezért akkor is megjelenhetnek hibák, ha a görbe nem átlátszó.
 
-Az utóbbi módszerek hibáinak a csökkentésére szokásos háromszögelni a szegmensekre osztott görbét. Ilyenkor el tudjuk kerülni, hogy két egymást követő szegmens egymást fedje. Ezt implementálja ImGui a CPU-n, valamint Rye Terrell a GPU-n, az utóbbival az a probléma, hogy a háromszögelés egyszerű, valamint nem minden esetet kezel le.
+Ezeknek a módszereknek a hibáit úgy csökkentem, hogy a szegmensekre osztott görbét háromszögelem. Így elkerülöm, hogy két egymást követő szegmens fedje egymást. Ilyen háromszögelést használ az ImGui a CPU-n, Rye Terrell pedig a GPU-n. Az utóbbi megoldással olyan problémáim vannak, hogy a szegmenseket összekötő join egy külön drawcall, valamint az implementációjában nem kezel le minden esetet és így könnyen lehet olyan ábrát kétrehozni, ahol a háromszögelésnél nagy hiba keletkezik.
 
 
 //Mivel a vonalprimitívekkel nem lehet szép vastag görbét létrehozni, ezért nekünk kell elkészítenünk a geometriát.
@@ -335,36 +335,36 @@ Az utóbbi módszerek hibáinak a csökkentésére szokásos háromszögelni a s
 //- http://artgrammer.blogspot.com/2011/07/drawing-polylines-by-tessellation.html
 //- Előző munkám
 
-== Görbe változatok
+== Görbeváltozatok
 
-Három görbe típust különbözetek meg kirajzolás szempontjából, Solid, Dotted és Patterned. Mind a háromnál adott a görbe végeinél a kupakok (Round, Square, Butt, Triangle In, Triangle Out), az interpolálandó színek, szélesség, valamint az hogy csatlakozzanak-e az elöző görbéhez.
-- Solid: A görbének csak kupakjai vannak.
-- Dottted: Megadhatóak, hogy milyen távol legyenek egymástol a pontok és egy pont a kettő megadott kupakból áll.
-- Patterned: A görbét szegmensekre osztom és a szegmenseknek adok kupakokat.
+Kirajzolás szempontjából három görbetípust különböztetek meg: Solid, Dotted és Patterned. Mindháromnál megadom a görbe végeinél a kupakokat (Round, Square, Butt, Triangle In, Triangle Out), az interpolálandó színeket, a szélességet, valamint azt, hogy csatlakozzanak-e az előző görbéhez.
+- Solid: a görbének csak kupakjai vannak.
+- Dotted: megadom, hogy milyen távol legyenek egymástól a pontok, és egy pont a két megadott kupakból áll.
+- Patterned: a görbét szegmensekre osztom, és a szegmenseknek adok kupakokat.
 
-Az alkalmazásban a görbéknek egy közös interfésze van a görbe jellemzőinek megadására. A görbe típusok között a görbéknek a spacing valamint a dash_length argumentumai felhasználásával döntök. Ha a görbének a spacing adattagja nulla, akkor szolid, ha spacing nem nulla de a dash_length az akkor dotted, különben Patterned.
+Az alkalmazásban a görbéknek egy közös interfésze van a görbe jellemzőinek megadására. A görbetípusok között a spacing és a dash_length argumentumok alapján döntök. Ha a görbe spacing adattagja nulla, akkor Solid, ha a spacing nem nulla, de a dash_length nulla, akkor Dotted, különben Patterned.
 
-A görbe változatokra azért volt szügségem, mert minimalizálni szeretném az elvégzett munkát. Páldául a Patterned görbénél szügséges nekem a görbe ívhossza de a Solid-nál nincs rá szükségem. Valamint a Dotted görbénél nincs szügség a görbe előállítására mivel elég csak kiszámolni a mintázatok helyét és négyszögeket rajzolni.
+A görbeváltozatokra azért van szükségem, mert minimalizálni szeretném az elvégzendő munkát. Például a Patterned görbénél szükségem van a görbe ívhosszára, a Solid görbénél viszont nincs rá szükségem. A Dotted görbénél pedig nem kell előállítanom a görbét, mivel elég kiszámolnom a mintázatok helyét, és négyszögeket rajzolni.
 
-Végül az alkalmazásban használt görbéket a generált geometria módszerével készítem el, ahol az elsődleges fókuszom a CPU használat minimalizálása anélkül, hogy a featuröket áldoznék fel. Egy másodlagos célja, hogy könnyen legyen bővíthető más tulajdonságokkal például új minták hozzáadása, változó vonalvastagság.
+Végül az alkalmazásban használt görbéket a generált geometria módszerével készítem el. Az elsődleges célom a CPU-használat minimalizálása anélkül, hogy a funkciókat feláldoznám. Másodlagos célom, hogy a görbéket könnyen bővíthessem más tulajdonságokkal, például új minták hozzáadásával vagy változó vonalvastagsággal.
 
-= Geometria Generálás
+= Geometria generálás
 
-Mivel a görbéket futás időben szerentém módosítani, emiatt nincs lehetőségem offline elkészíteni a háromszögelését vagy egyszer kiszámolni és azt újra felhasználni. Mivel egy-egy görbénénél a felbontás előre megadott, azaz nem válzotik attől függöen, hogy milyen alakja van a görbének, ezért ez egy könnyen párhuzamosítható feladat.
+Mivel a görbéket futás közben szeretném módosítani, nincs lehetőségem offline elkészíteni a háromszögelésüket, vagy egyszer kiszámolni, majd újra felhasználni őket. Mivel egy-egy görbénél a felbontást előre megadom, azaz nem függ a görbe alakjától, ezt a feladatot könnyen párhuzamosíthatom.
 
-Ha vesszek egy görbét, aminek a felbontása harminckettő, akkor az azt jelenti, hogy a Bezier görbe harminckettő helyen van kiértékelve és ezekből az értékekből harmincegy szegmenst kell létrehozni. Ahhot, hogy egy szegmens alakját meg tudjuk kapni, ahhoz elég csak négy pontot ismernünk, lásd @4point_segment. 
+Ha veszek egy harminckettes felbontású görbét, akkor a Bézier-görbét harminckét helyen értékelem ki, és ezekből az értékekből harmincegy szegmenst kell létrehoznom. Egy szegmens alakjának meghatározásához elég négy pontot ismernem, lásd @4point_segment.
 
 #figure(
   image("images/segment_from4point.png",width:80%),
-  caption: [Egy szegment elő állításához csak négy szomszédos pont szükséges]
+  caption: [Egy szegmens előállításához csak négy szomszédos pont szükséges]
 ) <4point_segment>
 
-Látható, hogy egy sarkok vertexei csak három ponttól függenek, ezért egyszerübb nem a szegmenseket venni a veretexek kiszámolásához, hanem a sarkokat. A sarkoknál négy plusz egy esetet különöbzetek meg, ami a háromszögelést befolyásolja.
-- Egyenes eset: Amikor három egymást követő pont egy egyenesbe esik.
-- Tompa szög: Amikor a három egymást követő pont egy tompaszöget alkot. Ilyenkor a görbe szegmenseknél miter csatlakozást alkalmazok
-- Hegyes szög: Amikor a három egymást követő pont egy tompaszöget alkot. Ilyenkor a görbe szegmenseknél bevel csatlakozást alkalmazok, pontosabban bevel eltolva a vonalvastagság felével.
-- Overlap: Ez az eset akkor fordul elő, amikor a görbének a szakasza túl rövid az adott szögnél és vonalvastagságnál. Ilyenkor a belső miter érték túl nyúlna a szegmensen és elrontaná a háromszögelést. 
-- Görbe vég: Ez az eset amikor a göbe utolsó pontját értékeljük ki és nincs három egymást követő pontunk.
+Egy sarok vertexei csak három ponttól függenek, ezért egyszerűbb a vertexek kiszámolásához nem a szegmenseket, hanem a sarkokat vennem. A sarkoknál négy plusz egy esetet különböztetek meg, és ezek befolyásolják a háromszögelést.
+- Egyenes eset: amikor három egymást követő pont egy egyenesbe esik.
+- Tompa szög: amikor a három egymást követő pont tompaszöget alkot. Ilyenkor a görbe szegmenseknél miter-csatlakozást alkalmazok.
+- Hegyes szög: amikor a három egymást követő pont hegyesszöget alkot. Ilyenkor a görbe szegmenseknél bevel-csatlakozást alkalmazok, pontosabban olyan bevelt, amelyet a vonalvastagság felével eltolok.
+- Overlap: ez az eset akkor fordul elő, amikor a görbe szakasza túl rövid az adott szög és vonalvastagság mellett. Ilyenkor a belső miter értéke túlnyúlna a szegmensen, és elrontaná a háromszögelést.
+- Görbe vég: ez az eset akkor áll fenn, amikor a görbe utolsó pontját értékelem ki, és nincs három egymást követő pontom.
 
 
 
@@ -381,9 +381,9 @@ Látható, hogy egy sarkok vertexei csak három ponttól függenek, ezért egysz
 
 
 
-== Görbe koordináta rendszer kialakítása
+== Görbe-koordinátarendszer kialakítása
 - törések kezelése
-- SDF (megmelíteni hogy lehet tesztúrázni)
+- SDF (megemlíteni, hogy lehet textúrázni)
 - Csillag
 
 = Összekapcsolt görbék
@@ -401,7 +401,7 @@ Látható, hogy egy sarkok vertexei csak három ponttól függenek, ezért egysz
 
 == Compute raster
 
-== "Adaptive" felbontás
+== "Adaptív" felbontás
 
 // További részletek a @intro -ben és a @telepítés -ben.
 
