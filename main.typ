@@ -229,8 +229,10 @@ Vannak más feltételek is, mint a színek és átlátszóság kezelése, valami
 
 === Vonalprimitíven alapuló módszerek
 
-- glLineStipple, ezzel meg lehetett adni egy tizenhat bites bitmaszkot és egy faktort, ami megadja a raszterizált mintázatot. Ennek a módszernek egy nagy hátránya az, hogy ez a legacy OpenGL fixed function pipeline része, amit már nem használnak. Az /*@vs_segment_curve*/ ábrán látható, hogyan nézhetett ki.
-- VK_KHR_line_rasterization, gyakorlatilag a glLineStipple, de egy modern API része. CAD alkalmazásoknak lett hozzáadva bővítményként, ugyanúgy meg lehet adni egy bitmaszkot és egy faktort, de hozzá még meg is lehet adni vonalraszterizációs algoritmust is. Egy nagy hátránya az, hogy nem minden eszközön van implementálva, vagy legalábbis nincsen teljesen implementálva, lásd /*@amd_impl_table*/. Valamint az is egy probléma, hogy ez egy Vulkan-specifikus bővítmény.
+A vonalprimitív egyenes szakaszokat rajzol: ilyen például a `GL_LINE_STRIP`, a `D3DPT_LINESTRIP` és a `VK_PRIMITIVE_TOPOLOGY_LINE_STRIP`. A Bézier-görbét ezért pontokban értékelem ki, és a pontokat vonalprimitívvel kötöm össze. A kapott törtvonal annál jobban közelíti a görbét, minél több pontban értékelem ki.
+
+- `glLineStipple`: tizenhat bites bitmaszkot és egy faktort fogad, és ebből számolja a raszterizált mintázatot. Nagy hátránya, hogy a legacy OpenGL fixed function pipeline része, amelyet a mai alkalmazások már nem használnak. Az /*@vs_segment_curve*/ ábrán látható, hogyan néz ki az eredmény.
+- `VK_KHR_line_rasterization`: gyakorlatilag a `glLineStipple` utódja egy modern API-ban. A bővítmény elsősorban a CAD-alkalmazások igényeit szolgálja. Ugyanúgy bitmaszkot és faktort fogad, emellett a vonalraszterizációs algoritmust is kiválaszthatom. Nagy hátránya, hogy nem minden eszköz implementálja, vagy nem teljesen, lásd /*@amd_impl_table*/. Emellett ez egy Vulkan specifikus bővítmény.
 
 //#figure(
 //  image("images/vk_segment_curve_combined.png",width:100%),
@@ -251,24 +253,39 @@ Vannak más feltételek is, mint a színek és átlátszóság kezelése, valami
 //  caption: [AMD Radeon(TM) 610M (2022) által támogatott algoritmusok],
 //) <amd_impl_table>
 
-- Vertex és fragment shader, a legegyszerűbb megoldás, ha csak kiszámoljuk a vertex shaderben, hogy egy adott pontnak milyen pixelkoordinátái vannak, majd a fragment shaderben az interpolált értékből kiszámoljuk, hogy melyik fragmenteket dobjuk el. Lehet látni az ábrán /*@gl_segment_curve*/, hogy a mintázat nem megfelelő, mert a szegmensek hossza nem egyezik meg a mintázat hosszával. Ezt ki lehet küszöbölni azzal, hogy CPU-n kiszámoljuk az adott ponthoz tartozó ívhosszát a görbének, de ezt potenciálisan minden frame-ben ki kell számolnunk, mert a mintázat screen space, de a kamera mozoghat, de ha kiszámoljuk, akkor a /*@vs_segment_curve*/ ábrához hasonló görbét kapunk.
+- Vertex és fragment shader: a legegyszerűbb megoldás, hogy a vertex shaderben kiszámolom a pont képernyőkoordinátáit, a fragment shaderben pedig az interpolált értékből meghatározom, mely fragmenteket dobom el. Az /*@gl_segment_curve*/ ábrán látszik, hogy a mintázat nem megfelelő, mert a szegmensek hossza nem egyezik meg a mintázat hosszával. Ezt kiküszöbölhetem úgy, hogy a CPU-n kiszámolom a görbe ívhosszát az adott pontig. Ezt viszont minden képkockánál újra kell számolnom, mert a mintázat képernyőtérben van, a kamera pedig mozoghat. Ha kiszámolom, a /*@vs_segment_curve*/ ábrához hasonló görbét kapok.
 
 //#figure(
 //  image("images/gl_segment_curve_combined.png",width:100%),
 //  caption: [Vertex és fragment shader használatával megjelenített szegmens és görbe.]
 //) <gl_segment_curve>
 
-Az /*@vs_segment_curve*/ ábrán lehetett olyan hibát látni, hogy a szaggatások a görbén mintha rossz irányba állnának meg keresztezik egymást a görbületnél. Ez azért fordul elő, mert a görbe szakaszokból áll és a szakaszok egyenesek, amikre a szaggatásos mintázat merőleges.
+Az /*@vs_segment_curve*/ ábrán olyan hiba is látszik, hogy a szaggatások a görbületnél rossz irányba állnak, és keresztezik egymást. Ez azért történik, mert a görbe egyenes szakaszokból áll, és a szaggatásos mintázat merőleges ezekre a szakaszokra.
 
-Valamint a vonalprimitíveknek van három nagy hátránya a görbék rajzolására, számomra.
-- Nem garantált, hogy tudunk vonalvastagságot megadni, mert az eszközfüggő, a DX11-ben egyszerűen nincsen metódusunk a vonalvastagság megadására.
-- A vertex és fragment shader szempontjából nincsen a vonalnak vastagsága, azaz tudunk adni értékeket, amik a hossz mentén interpolálódnak, de nem tudunk a szélesség mentén ugyanezt megadni. Ennek az eredménye az, hogy csak különböző szaggatásokat tudunk létrehozni, de nem tudjuk a görbe végét lekerekíteni.
-- A vastag vonalak által létrehozott solid görbe nem szép /*@line_solid_curve*/, mivel nem nyúlnak túl a szegmensek két pont között.
+Összefoglalva, a vonalprimitíveknek három nagy hátránya van a görbék rajzolásában:
+- A vonalvastagság nem garantált. OpenGL core profilban az 1-nél nagyobb vastagság nem garantált, Vulkanban a vastag vonal a választható `wideLines` funkció, a DX11-ben pedig egyáltalán nincs vonalvastagság.
+- A vertex és a fragment shader szempontjából a vonalnak nincs vastagsága. A vonal hossza mentén interpolált értékeket adhatok meg, a szélesség mentén nem. Ezért csak különböző szaggatásokat hozhatok létre, a görbe végét viszont nem tudom lekerekíteni.
+- A vastag vonalakból összeállított solid görbe nem szép /*@line_solid_curve*/, mert a szegmensek a két végpontjukon túl nem nyúlnak ki, ezért az illesztéseknél rések maradnak.
 
 //#figure(
 //  image("images/vk_curve_thick_solid.png",width:80%),
 //  caption: [Vastag görbe vonalprimitívekkel kirajzolva]
 //) <line_solid_curve>
+
+// One large after every one
+//A módszereket a @line_table táblázat foglalja össze a fejezet elején felsorolt szempontok //szerint.
+//
+//#figure(
+//  table(
+//    columns: 6,
+//    align: (left, center, center, center, center, center),
+//    [Módszer], [Pixelben megadott vastagság], [Változtatható vastagság], [Mintázat], //[Működik térben], [Portabilitás],
+//    [glLineStipple], [Igen], [Eszközfüggő], [Igen], [Igen], [Nem],
+//    [Vulkan], [Igen], [Eszközfüggő], [Igen], [Igen], [Nem],
+//    [Vertex + Fragment], [Igen], [Eszközfüggő], [Részben], [Igen], [Igen],
+//  ),
+//  caption: [A vonalprimitíven alapuló módszerek összehasonlítása.]
+//) <line_table>
 
 === Vektorgrafika
 
@@ -325,19 +342,31 @@ Három görbe típust különbözetek meg kirajzolás szempontjából, Solid, Do
 - Dottted: Megadhatóak, hogy milyen távol legyenek egymástol a pontok és egy pont a kettő megadott kupakból áll.
 - Patterned: A görbét szegmensekre osztom és a szegmenseknek adok kupakokat.
 
+Az alkalmazásban a görbéknek egy közös interfésze van a görbe jellemzőinek megadására. A görbe típusok között a görbéknek a spacing valamint a dash_length argumentumai felhasználásával döntök. Ha a görbének a spacing adattagja nulla, akkor szolid, ha spacing nem nulla de a dash_length az akkor dotted, különben Patterned.
+
 A görbe változatokra azért volt szügségem, mert minimalizálni szeretném az elvégzett munkát. Páldául a Patterned görbénél szügséges nekem a görbe ívhossza de a Solid-nál nincs rá szükségem. Valamint a Dotted görbénél nincs szügség a görbe előállítására mivel elég csak kiszámolni a mintázatok helyét és négyszögeket rajzolni.
+
+Végül az alkalmazásban használt görbéket a generált geometria módszerével készítem el, ahol az elsődleges fókuszom a CPU használat minimalizálása anélkül, hogy a featuröket áldoznék fel. Egy másodlagos célja, hogy könnyen legyen bővíthető más tulajdonságokkal például új minták hozzáadása, változó vonalvastagság.
 
 = Geometria Generálás
 
-Mivel a görbéket futás időben szerentém módosítani, emiatt nincs lehetőségem offline elkészíteni a háromszögelését. Mivel egy-egy görbénénél a felbontás előre megadott, azaz nem válzotik attől függöen, hogy milyen alakja van a görbének, ezért ez egy könnyen párhuzamosítható feladat.
+Mivel a görbéket futás időben szerentém módosítani, emiatt nincs lehetőségem offline elkészíteni a háromszögelését vagy egyszer kiszámolni és azt újra felhasználni. Mivel egy-egy görbénénél a felbontás előre megadott, azaz nem válzotik attől függöen, hogy milyen alakja van a görbének, ezért ez egy könnyen párhuzamosítható feladat.
 
 Ha vesszek egy görbét, aminek a felbontása harminckettő, akkor az azt jelenti, hogy a Bezier görbe harminckettő helyen van kiértékelve és ezekből az értékekből harmincegy szegmenst kell létrehozni. Ahhot, hogy egy szegmens alakját meg tudjuk kapni, ahhoz elég csak négy pontot ismernünk, lásd @4point_segment. 
-
 
 #figure(
   image("images/segment_from4point.png",width:80%),
   caption: [Egy szegment elő állításához csak négy szomszédos pont szükséges]
 ) <4point_segment>
+
+Látható, hogy egy sarkok vertexei csak három ponttól függenek, ezért egyszerübb nem a szegmenseket venni a veretexek kiszámolásához, hanem a sarkokat. A sarkoknál négy plusz egy esetet különöbzetek meg, ami a háromszögelést befolyásolja.
+- Egyenes eset: Amikor három egymást követő pont egy egyenesbe esik.
+- Tompa szög: Amikor a három egymást követő pont egy tompaszöget alkot. Ilyenkor a görbe szegmenseknél miter csatlakozást alkalmazok
+- Hegyes szög: Amikor a három egymást követő pont egy tompaszöget alkot. Ilyenkor a görbe szegmenseknél bevel csatlakozást alkalmazok, pontosabban bevel eltolva a vonalvastagság felével.
+- Overlap: Ez az eset akkor fordul elő, amikor a görbének a szakasza túl rövid az adott szögnél és vonalvastagságnál. Ilyenkor a belső miter érték túl nyúlna a szegmensen és elrontaná a háromszögelést. 
+- Görbe vég: Ez az eset amikor a göbe utolsó pontját értékeljük ki és nincs három egymást követő pontunk.
+
+
 
 == Segment Culling
 
