@@ -297,6 +297,11 @@ Emellett ezekkel az interfészekkel az ábra elemeit festőalgoritmussal rajzolo
 
 Ezeknél az interfészeknél egy másik probléma, hogy változó geometria megjelenítésére nem alkalmasak. Affin transzformációkat, például forgatást és eltolást minimális költséggel hajthatok végre rajtuk. A kontrollpontok módosítása viszont jelentős költséget jelent.
 
+#figure(
+  image("images/spiral.png",width:30%),
+  caption: [Spirál több Bézer szegmenssel kirajzólva, ahol először a kék elemek lettek kirajzolva, majd a narancssárga elemek]
+) <spiral>
+
 //#figure(
 //  image("images/nvpr_2d.png",width:80%),
 //  caption: [NV_path_rendering használatával elkészített 2D Bézier görbék]
@@ -359,27 +364,174 @@ Ha veszek egy harminckettes felbontású görbét, akkor a Bézier-görbét harm
   caption: [Egy szegmens előállításához csak négy szomszédos pont szükséges]
 ) <4point_segment>
 
-Egy sarok vertexei csak három ponttól függenek, ezért egyszerűbb a vertexek kiszámolásához nem a szegmenseket, hanem a sarkokat vennem. A sarkoknál négy plusz egy esetet különböztetek meg, és ezek befolyásolják a háromszögelést.
+Egy-egy szegmens csatlakozásnál maximum három pontot használok és azok három szomszédos ponttól függenek, ezért egyszerübb magugat a sarkokat venni. A sarkoknál négy plusz egy esetet különböztetek meg, és ezek befolyásolják a háromszögelést.
 - Egyenes eset: amikor három egymást követő pont egy egyenesbe esik.
 - Tompa szög: amikor a három egymást követő pont tompaszöget alkot. Ilyenkor a görbe szegmenseknél miter-csatlakozást alkalmazok.
 - Hegyes szög: amikor a három egymást követő pont hegyesszöget alkot. Ilyenkor a görbe szegmenseknél bevel-csatlakozást alkalmazok, pontosabban olyan bevelt, amelyet a vonalvastagság felével eltolok.
-- Overlap: ez az eset akkor fordul elő, amikor a görbe szakasza túl rövid az adott szög és vonalvastagság mellett. Ilyenkor a belső miter értéke túlnyúlna a szegmensen, és elrontaná a háromszögelést.
-- Görbe vég: ez az eset akkor áll fenn, amikor a görbe utolsó pontját értékelem ki, és nincs három egymást követő pontom.
+- Overlap: ez az eset akkor fordul elő, amikor a görbe szakasza túl rövid az adott szög és vonalvastagság mellett. Ilyenkor a belső miter csúcs túlnyúlna a szegmensen, és elrontaná a háromszögelést, ezért a két szegmenst a sarkon túl meghosszabbítom, és hagyom, hogy fedjék egymást.
+- Görbe vég: ez az eset akkor áll fenn, amikor a görbe első vagy utolsó pontjánál nincs három egymást követő pontom.
 
+#figure(
+  image("images/triangulation_combined.png",width:80%),
+  caption: [Háromszögelések esete]
+) <triangulation>
 
+Először a háromdimenziós pontokat képernyő-koordinátarendszerbe képezem, mivel a görbék vastagságát pixelekben adom meg, és a háromszögelés is két dimenzióban történik. A $bold(p)$ világkoordinátájú pontból a nézeti-vetítési mátrixszal kapom az $(x, y, z, w)$ vágási koordinátát, majd a perspektív osztás után $(x\/w, y\/w)$ a $W times H$ méretű képernyőre képezem:
 
-== Segment Culling
+$ bold(p)_"px" = (1/2 vec(x\/w, y\/w) + vec(1/2, 1/2)) * vec(W, H). $
+
+Minden szegmenst egy ötcsúcsú háromszögsávként (triangle strip) rajzolok ki, így egy szegmens három háromszögből áll: $(0, 1, 2)$, $(1, 2, 3)$ és $(2, 3, 4)$. A 0-s és 1-es csúcs a szegmens kezdőpontjában, a 2-es, 3-as és 4-es csúcs a végpontjában van. A 4-es csúcs csak a hegyes szögű bevelnél kap saját helyet, minden más esetben egybeesik a 3-as csúccsal, ezért az utolsó háromszög elfajult, és a raszterizáló eldobja.
+
+Minden csúcs a többitől függetlenül, csak a saját sarkát nézve számolja ki a helyét. Jelölje $bold(C)$ a csúcs sarkát, $bold(Q)$ a szegmens másik végpontját, $bold(N)$ pedig a sarkon túli szomszédos pontot. A kezdőpont csúcsainál a szegmenst visszafelé járom be: $bold(C) = bold(P)_i$, $bold(Q) = bold(P)_(i+1)$ és $bold(N) = bold(P)_(i-1)$; a végpont csúcsainál $bold(C) = bold(P)_(i+1)$, $bold(Q) = bold(P)_i$ és $bold(N) = bold(P)_(i+2)$. Így a szegmens mindkét végén ugyanazok a képletek érvényesek. A $w$ vonalvastagságból $h = w/2$ a félvastagság. A sarokba befutó és onnan kifutó irány:
+
+$ bold(d)_"be" = (bold(C) - bold(Q)) / l_"be", quad bold(d)_"ki" = (bold(N) - bold(C)) / l_"ki", quad l_"be" = |bold(C) - bold(Q)|, quad l_"ki" = |bold(N) - bold(C)|. $
+
+Mindkét irányvektort 90 fokkal az óramutató járásával megegyező irányba forgatom, így kapom az $bold(r)_"be"$ és $bold(r)_"ki"$ normálvektort, ahol $bold(r) = (d_y, -d_x)$. Az $alpha$ fordulási szöget a $cos alpha = bold(d)_"be" dot bold(d)_"ki"$ összefüggés adja meg: $cos alpha = 1$ egyenes haladást, $cos alpha = -1$ teljes visszafordulást jelent. A fordulási szög nem a két szegmens által bezárt szög, hanem annak kiegészítője: a bezárt szög $180 degree - alpha$.
+
+A csúcs helye $bold(C) + h bold(o)$, ahol $bold(o)$ a félvastagság egységében mért eltolás. Az $s = plus.minus 1$ előjel megadja, hogy a csúcs a sarok saját koordinátarendszerében a jobb ($s = 1$: 0-s, 3-as és 4-es csúcs) vagy a bal oldalon ($s = -1$: 1-es és 2-es csúcs) van. Mivel a kezdőpontot visszafelé nézem, a 0-s és a 2-es csúcs fizikailag a görbe ugyanazon oldalára kerül, az 1-es és a 3-as pedig a másikra. A pixelben kapott eltolást végül normalizált eszközkoordinátává alakítom, és hozzáadom a sarok vetített helyéhez: $bold(C)_"NDC" + (2h) / vec(W, H) dot.o bold(o)$.
+
+*Tompa szög* ($cos alpha >= 0$, azaz $alpha <= 90 degree$). Mindkét oldalon miter csatlakozást alkalmazok:
+
+$ bold(m) = (bold(r)_"be" + bold(r)_"ki") / (1 + cos alpha), quad bold(o) = s bold(m). $
+
+Mivel $|bold(r)_"be" + bold(r)_"ki"| = 2 cos(alpha/2)$ és $1 + cos alpha = 2 cos^2(alpha/2)$, ezért $|bold(m)| = 1 / cos(alpha/2)$, és $bold(m)$ a két normális szögfelezőjébe mutat. A $bold(C) plus.minus h bold(m)$ pont tehát pontosan a két szegmens $h$ távolságra eltolt szélének metszéspontja, és ehhez sem normalizálásra, sem szögfüggvényre nincs szükségem. A sarokban találkozó két szegmens ugyanazt a két metszéspontot számolja ki, ezért köztük nem marad rés, és nem is fedik egymást. A 4-es csúcs egybeesik a 3-assal.
+
+*Egyenes eset* ($cos alpha = 1$). Ekkor $bold(r)_"be" = bold(r)_"ki"$, ezért a miter képlete $bold(m) = (2 bold(r)_"be") / 2 = bold(r)_"be"$-re egyszerűsödik, és a csúcsok a $bold(C) plus.minus h bold(r)_"be"$ pontokba kerülnek. A szegmens egy $l_"be" times 2h$ méretű téglalap, amelyet a két háromszög átlósan oszt ketté (@triangulation, első sor). Az egyenes esetet tehát nem kezelem külön, a tompa szög képletéből adódik.
+
+*Hegyes szög* ($cos alpha < 0$). Ahogy $alpha$ a 180 fokhoz közelít, $|bold(m)| = 1/cos(alpha/2)$ a végtelenhez tart, ezért a külső oldalon a miter csúcs túl messze kerülne a görbétől. A belső oldalon viszont a miter csúcs a görbén belül marad, ott továbbra is azt használom. A belső oldal az, amerre a görbe fordul: a sarok saját koordinátarendszerében a jobb oldal, ha $bold(r)_"ki" dot bold(d)_"be" < 0$. Legyen $sigma = 1$, ha a belső oldal a jobb, különben $sigma = -1$. A belső oldali csúcs eltolása
+
+$ bold(o) = sigma bold(m). $
+
+A külső oldalon a bevel egyenese merőleges a $bold(b) = bold(m) \/ |bold(m)|$ szögfelezőre, és $h$ távolságra van $bold(C)$-től, vagyis érinti a kerek csatlakozás $h$ sugarú körét. Ezt az egyenest metszem el a befutó szegmens külső szélével, a $bold(C) - sigma h bold(r)_"be" + u bold(d)_"be"$ egyenessel. Mivel $bold(r)_"be" dot bold(b) = cos(alpha/2)$ és $-sigma bold(d)_"be" dot bold(b) = sin(alpha/2)$, a $(bold(x) - bold(C)) dot (-sigma bold(b)) = h$ feltételből
+
+$ u = h (1 - cos(alpha/2)) / sin(alpha/2) = h tan(alpha/4). $
+
+A külső oldali csúcs tehát a befutó szegmens szélén, a sarkon $h tan(alpha/4)$ távolsággal túl van, a 4-es csúcs pedig ugyanígy a kifutó szegmens szélén, a sarok előtt:
+
+$ bold(o) = -sigma bold(r)_"be" + tan(alpha/4) bold(d)_"be", quad bold(o)_4 = -sigma bold(r)_"ki" - tan(alpha/4) bold(d)_"ki". $
+
+A $tan(alpha/4)$ értékét sem szögfüggvénnyel számolom: $cos(alpha/2) = bold(r)_"be" dot bold(b)$, és $tan(alpha/4) = sqrt((1 - cos(alpha/2)) / (1 + cos(alpha/2)))$. A $(2, 3, 4)$ háromszög, amelynek csúcsai a belső miter csúcs és a két külső pont, tölti ki a két szegmens közötti ékét (@triangulation, utolsó sor, kék). A következő szegmens kezdőpontjánál a saját koordinátarendszerében $bold(d)'_"be" = -bold(d)_"ki"$, $bold(r)'_"be" = -bold(r)_"ki"$, és a fordulás iránya is megfordul, azaz $sigma' = -sigma$. A külső csúcsa így $-sigma' bold(r)'_"be" + tan(alpha/4) bold(d)'_"be" = bold(o)_4$, vagyis pontosan a 4-es csúcsra esik. Mivel kezdőpontnál nincs 4-es csúcs, az éket csak a korábbi szegmens rajzolja ki, ezért ott sem marad rés, és nincs átfedés.
+
+*Overlap*. A belső miter csúcs a sarokból mindkét szegmens mentén $h tan(alpha/2)$ távolságra hátrál. Ha ez nagyobb, mint a két szegmens közül a rövidebbik, azaz
+
+$ h tan(alpha/2) > min(l_"be", l_"ki"), $
+
+akkor a belső csúcs a szegmens másik végén is túlnyúlik, a háromszögsáv átfordul önmagán, és a háromszögelés elromlik. A $tan(alpha/2)$ értékét a $bold(d)_"ki"$ és a $bold(b)$ szögfelező közötti $beta = 90 degree - alpha/2$ szögből számolom: $cos beta = |bold(d)_"ki" dot bold(b)|$, és $tan(alpha/2) = cos beta \/ sqrt(1 - cos^2 beta)$. Közel teljes visszafordulásnál ($cos alpha <= -0.9996$) a miter vektor numerikusan is használhatatlan, ezért ezt degenerált esetnek tekintem. Ilyenkor lemondok a csatlakozás geometriájáról, és a szegmenst a sarkon túl $h$ távolsággal meghosszabbított téglalapként rajzolom ki:
+
+$ bold(o) = bold(d)_"be" + s bold(r)_"be". $
+
+A túlnyúló részt a pixel shader alakítja ki a csatlakozás típusa szerint: kerek csatlakozásnál a $bold(C)$ középpontú, $h$ sugarú félkört hagyja meg, szögletesnél a téglalapot változatlanul. A két szegmens ilyenkor fedi egymást (@triangulation, bal alsó rész), ezért átlátszó színnél az átfedésben kétszer keverem be a görbe színét. Ezt elfogadom, mert csak rövid szegmenseknél és éles fordulóknál fordul elő, ahol a hiba kis területre esik. Tompa szögnél nem vizsgálom az átfedést, mert ott $tan(alpha/2) <= 1$, a belső csúcs tehát legfeljebb $h$ távolságra hátrál, és ez csak $h$-nál rövidebb szegmenseknél okoz hibát.
+
+*Görbe vég*. Ha a sarokban nincs szomszédos szegmens, mert a pont a görbe első vagy utolsó pontja, akkor a szomszédos pont helyére a szegmens másik végpontját teszem: $bold(N) = bold(Q)$. Ekkor $bold(d)_"ki" = -bold(d)_"be"$ és $cos alpha = -1$, vagyis a görbe vége a teljes visszafordulás esete, és külön elágazás nélkül az overlap képletét kapja:
+
+$ bold(o) = bold(d)_"be" + s bold(r)_"be". $
+/*
+A szegmens tehát $h$ távolsággal túlnyúlik a görbe végén, és ebből a téglalapból a pixel shader vágja ki a görbéhez megadott kupakot: Butt kupaknál a végpontnál levágja, Square kupaknál a téglalapot meghagyja, Round kupaknál $h$ sugarú félkört, Triangle Out és Triangle In kupaknál pedig háromszöget formál belőle. Egyik kupak sem nyúlik $h$-nál messzebbre a végponttól, ezért a meghosszabbítás mindegyikhez elég.
+
+A pixel shader a görbe alakját két interpolált koordinátából számolja. Az $a$ hossz menti koordináta a szegmens kezdőpontjában 0, a végpontjában $l_"be"$, a kettő között lineáris. A kezdőpont csúcsainál $a = -h (bold(o) dot bold(d)_"be")$, a végpont csúcsainál $a = l_"be" + h (bold(o) dot bold(d)_"be")$, így a meghosszabbított csúcsoknál $a = -h$, illetve $a = l_"be" + h$. Az oldalirányú koordináta a sáv két szélén $plus.minus h$, a 4-es csúcsnál pedig az eltolás $bold(r)_"be"$-re vett vetülete. Mindkettőt perspektív korrekció nélkül interpolálom, mivel képernyőtérben számoltam őket.
+*/
+== Segment Clipping <segment_clipping>
+
+A háromszögelés képernyő koordináta rendszerben, a perspektív osztás után történik, ezért a szegmenst még az osztás előtt, látógúla alapján vágnom kell. A raszterizáló ugyan maga is vágja a háromszögeket, de a vertex shader már a $w$-vel osztott pontokkal számol és ha a vágást nem teszem meg, akkor hibás pontokkal számolnám.
+
+#figure(
+  image("images/why_need_clipping.png",width:70%),
+  caption: [Ha nem vágom el a szakoszokat a látógúla éleinél, akkor rosszak a vetített egyenesek a képernyő koordinátarendszerben.]
+) <why_clip>
+
+Egy $(x, y, z, w)$ koordinátájú pont a látógúlán belül van, ha mind a hat síktól mért távolsága nemnegatív. Az oldalsíkoknál ezek a távolságok
+$ w + x, quad w - x, quad w + y, quad w - y. $
+A mélységnél a szokásos, $[0, 1]$ mélységtartományú vetítésben a közeli sík $z = 0$, a távoli sík pedig $z = w$ (ez a használt vetítési mátrixtól függ, reversed-Z esetén például a két sík felcserélődik), a két mélységi távolság tehát
+$ z, quad w - z. $
+Jelölje $D_k (bold(p))$ a $bold(p)$ pont $k$-adik síktól mért távolságát, azaz a fenti hat kifejezés közül a $k$-adikat. Mivel ezek a távolságok a vágási térben, azaz a homogén koordinátákban, a $w$-vel való osztás előtt lineárisak, a szegmens $bold(A)$ és $bold(B)$ végpontja között $bold(A) + t (bold(B) - bold(A))$ alakban mozogva a $k$-adik sík távolsága is lineárisan változik $D_k (bold(A))$ és $D_k (bold(B))$ között. A síkot ott metszi a szegmens, ahol
+$ t_k = -(D_k (bold(A))) / (D_k (bold(B)) - D_k (bold(A))). $
+
+A vágás a Liang--Barsky-algoritmust követi @liang-barsky:
+- Ha minden $k$-ra $D_k (bold(A)) >= 0$ és $D_k (bold(B)) >= 0$, akkor a szegmenst nem kell vágnom.
+- Ha van olyan $k$, amelyre $D_k (bold(A)) < 0$ és $D_k (bold(B)) < 0$, akkor a szegmenst eldobom: a csúcs pozíciója NaN lesz, így a raszterizáló az összes háromszögét eldobja. Ugyanígy dobom el a szegmenst akkor is, ha valamelyik végpontja már NaN.
+- Különben a $D_k (bold(B)) - D_k (bold(A)) > 0$ síkok $t_k$ értékei közül a legnagyobb adja a $t_0$, a $D_k (bold(B)) - D_k (bold(A)) < 0$ síkoké közül a legkisebb a $t_1$ értéket, $t_0 >= 0$ és $t_1 <= 1$ mellett. Ha $t_0 >= t_1$, akkor nincs olyan $t$, amelyre minden $D_k$ nemnegatív, ezért ezt a szegmenst is eldobom. Egyébként az új végpontok $bold(A) + t_0 (bold(B) - bold(A))$ és $bold(A) + t_1 (bold(B) - bold(A))$.
+
+A homogén koordinátákban végzett lineáris interpoláció a vetítés után is a szegmens egy pontját adja, ezért a vágott végpontokat ugyanúgy oszthatom el $w$-vel, mint az eredetieket. A többi görbe mentén interpolált értékeket, például a színt és az ívhosszokat is $t_0$ és $t_1$ paraméterrel interpolálom a két végpont között.
+
+A vágás a háromszögelést is befolyásolja. Ha $t_0 > 0$, akkor a szegmens kezdőpontját levágtam, és a kezdőpont előtti szomszédos pont már nem a sarok szomszédja; ugyanez igaz a végpontra, ha $t_1 < 1$. Ilyenkor úgy veszem, hogy abban a pontban végetért a görbe.
+
+A szomszédos pontot nem vágom a szegmenssel együtt, mert abból csak az irányt használom. Ha viszont a közeli sík mögé esik, akkor a perspektív osztás után rossz irányt adna @why_clip, ezért a sarokpont felé húzom egészen a közeli síkig. A mélységi távolságokból számolom, hogy a sarokpont felé mekkora $t$ paraméternél éri el a síkot, és a szomszédos pontot $bold(N) + t (bold(C) - bold(N))$-re cserélem.
 
 
 == Numerikus hibák csökkentése
 
 = Mintázat
 
-== Screen space
+A Dotted és Patterned görbéknél mintázatot is számolok, és a mintázatoknál két irányba tudok elmenni. Az egyik, hogy az egész mintázatot képernyőtérben számolom, azaz a minták távolságát pixelekben adom meg. Ennek a módszernek az az előnye, hogy akármilyen közel megy a kamera a görbéhez, a minták közötti távolság a képernyőn állandó marad, így a görbe nem tűnhet el két minta között. A problémája az, hogy kis kameramozgásnál is drasztikusan elmozdulhatnak a minták (@screen_space_pattern). Ennek az az oka, hogy az ívhosszat a görbe elejétől mérem: ha a görbe eleje a vetítés után kicsit elmozdul vagy megnyúlik, akkor a mintázat a görbe teljes hosszán eltolódik, és ez az eltolódás a görbe vége felé halmozódik.
 
-== Stable in World space
+#figure(
+  image("images/overlay_50.png",width:90%),
+  caption: [Minimális kameramozgatással is drasztikusan változhat a mintázatok helye]
+) <screen_space_pattern>
 
+Az utóbbi miatt egy másik megoldást implementáltam, ahol a minták távolságát világtérben adom meg. Így ahelyett, hogy a kamera mozgásával egyre több vagy kevesebb minta lenne a görbén, a minták összenyomódnak vagy széthúzódnak. Ennek a módszernek az a hátránya, hogy nem alkalmas olyan esetekre, amikor a kamera nagyon közel kerül a görbéhez, és éppen két minta közé esik. Abban az esetben sem ideális, ha nem akarunk minden görbénél külön mintatávolságot megadni. Cserébe mozgás közben stabilabb a mintázat, azaz nem mozdulnak el a mintázatok drasztikusan mozgás közben.
 
+== Ívhosszak számolása
+
+Mivel a görbét mintavételezem, és törtvonallal közelítem, ezért elég minden mintavételi ponthoz kiszámolnom az ívhosszat. Ennek a feladatnak egy triviális megoldása, hogy sorban végigmegyek a szegmenseken, és összeadom a hosszukat. Mivel a lehető legtöbb munkát a GPU-n szeretném végezni, és a görbék felbontása változó, ezért más módszert kell használnom.
+
+Két görbetípusnak van mintázata, a Dotted és a Patterned görbének. A Patterned görbénél egy minta hosszát is megadhatom, ami képernyőtérben, pixelben értendő. Így a Dotted görbénél elég világtérben kiszámolni az ívhosszat, míg a Patterned görbénél világtérben és képernyőtérben is szükségem van rá.
+
+Először minden szegmens hosszát kiszámolom. Világtérben ez a két szomszédos mintavételi pont távolsága:
+
+$ l_i = |bold(P)_(i+1) - bold(P)_i|. $
+
+Képernyőtérben ugyanezt a pixelbe vetített pontokkal számolom. A vetített hossz azonban nagyon elfajulhat: ha a szegmens egyik végpontja a közeli sík mögé kerül, a vetített hossza a végtelenhez tarthat (@long_screen_space_segment). Ezért ha a szegmens teljesen a közeli sík mögött van, akkor a képernyőtérbeli hosszát nullának veszem, ha pedig csak az egyik végpontja, akkor a szegmenst a közeli síkra vágom, és a vágott szegmens vetített hosszával számolok. Az oldalsíkokra szándékosan nem vágok: a képernyőn kívüli részek is beleszámítanak a képernyőtérbeli ívhosszba, így a mintázat nem ugrik el, amikor a görbe egy része kicsúszik a képből. Vágás után a képernyőtérbeli hosszt ugyanúgy kezelhetem, mint a világtérbelit.
+
+#figure(
+  image("images/length_towards_infinity.png",width:90%),
+  caption: [Ha nem vágom el a szegmenst a közeli síknál, akkor a hossza a végtelenhez tarthat]
+) <long_screen_space_segment>
+
+Ha ezekre a hosszakra lefuttatok egy prefix sum műveletet, akkor megkapom az adott ponthoz tartozó ívhosszat:
+
+$ s_i = sum_(j < i) l_j. $
+
+Az összeg exclusive, vagyis a görbe első pontjában az ívhossz nulla. Erre a parallel prefix sum algoritmust használom, pontosabban annak szegmentált változatát (segmented parallel prefix sum). Mivel az összes görbe ívhosszát egy tömbben tárolom, a szegmentálással érem el, hogy két, nem összekapcsolt görbe ne legyen hatással egymás ívhosszaira: az összeg minden olyan görbe elején újraindul, amely nem kapcsolódik az előzőhöz, az összekapcsolt görbéken pedig folytatódik (@len_sum).
+
+#figure(
+  image("images/len_sum.png",width:90%),
+  caption: [Görbe ívhosszának kiszámítása az adott pontban]
+) <len_sum>
+
+== Mintázatok kiszámolása
+
+A minták középpontjai a világtérbeli ívhossz mentén egyenletesen helyezkednek el: a $k$-adik minta középpontja az $s = k dot d$ ívhossznál van, ahol $d$ a mintatávolság. Összekapcsolt görbéknél az ívhossz a görbék között folytatódik, ezért a mintázat is folytonos marad az illesztéseknél. Egy görbe azokat a középpontokat kapja meg, amelyek a görbe első és utolsó pontjának ívhossza közé esnek. Ha
+
+$ N(s) = cases(floor(s \/ d) + 1 & "ha" s > 0, 0 & "különben,") $
+
+akkor egy görbe mintáinak száma $N(s_"utolsó") - N(s_"első")$. Ezt minden görbére párhuzamosan kiszámolom, majd a darabszámokra egy exclusive prefix sumot futtatok, így megkapom, hogy a görbe mintái hányadik helytől kezdődnek a közös mintatömbben, a tömb utolsó eleme pedig az összes minta száma (@pattern_count).
+
+Az indexeket azért prefix summal számolom, és nem atomikus számlálóval foglalok helyet a mintáknak, mert így a minták sorrendje a tömbben determinisztikus, és megegyezik a görbék sorrendjével. A Patterned görbénél erre azért van szükségem, hogy kirajzoláskor az egymás melletti görbék mintái a tömbben is egymás mellett legyenek, így egy görbe pixelénél a szomszédos minták a szomszédos indexeken találhatók. A Dotted görbénél a minták sorrendje a kirajzolás sorrendje is. Mivel az élsimítást alpha blendinggel oldom meg, és abban az esetben ha a keverés nem sorrendfüggetlen, a minták sorrendje képkockáról képkockára változna, akkor az egymást fedő minták szélei vibrálnának.
+
+#figure(
+  image("images/pattern_count.png",width:90%),
+  caption: [A görbénkénti mintaszámból prefix sum adja a görbe első mintájának indexét és a minták teljes számát]
+) <pattern_count>
+
+Ezután minden mintához megkeresem, melyik szegmensre esik. Mivel az $s_i$ ívhosszak egy görbén belül monoton nőnek, ezt bináris kereséssel teszem a görbe mintavételi pontjai között. A megtalált szegmensen belül a világtérbeli ívhossz alapján interpolálom a képernyőtérbeli ívhosszat, és ezt tárolom el a minta helyeként. Görbénként több szál dolgozik, mindegyik a görbe mintáinak egy részét számolja.
+
+A mintatömb méretét viszont nem tudom a GPU-n meghatározni. A GPU-n nem tudok memóriát foglalni, a buffert előre, a CPU-n kell lefoglalnom. A pontos mintaszámot a GPU számolja ki, ennek visszaolvasása viszont várakoztatná a CPU-t a GPU-ra, ami pont azt a szinkronizációt vezetné be, amit el szeretnék kerülni. Ezért a CPU-n felülről becsülöm, hogy egy görbének legfeljebb hány mintája lehet. Mivel ezt minden alkalommal újra kell számolnom, amikor egy görbe alakja vagy mintatávolsága változik, a becslésnek gyorsnak kell lennie: nem értékelhetem ki a görbét, és nem számolhatok ívhosszat.
+
+A felső becsléshez a Bézier-görbe ívhosszát a kontrollpoligon hosszával becsülöm (@upper_bound). A harmadfokú görbe deriváltja $bold(B)'(t) = 3 sum_(i=0)^2 b_(i,2)(t) bold(d)_i$, ahol $bold(d)_i = bold(P)_(i+1) - bold(P)_i$. A háromszög-egyenlőtlenség és $integral_0^1 b_(i,2)(t) dif t = 1/3$ miatt
+
+$ L = integral_0^1 |bold(B)'(t)| dif t <= 3 sum_(i=0)^2 |bold(d)_i| integral_0^1 b_(i,2)(t) dif t = |bold(d)_0| + |bold(d)_1| + |bold(d)_2|. $
+
+Egy $L$ hosszú szakaszra legfeljebb $floor(L \/ d) + 1$ olyan pont eshet, amelynek ívhossza $d$ többszöröse, ezért egy görbe mintáinak száma legfeljebb
+
+$ floor((|bold(d)_0| + |bold(d)_1| + |bold(d)_2|) / d) + 1. $
+
+Ehhez görbénként csak három vektor hosszát kell kiszámolnom, amit a görbéken párhuzamosan végzek. A becslések összegét kettő hatványára kerekítem, és ekkora mintatömböt foglalok. Csak akkor foglalom újra, ha a becslés már nem fér el benne, vagy a negyedére csökken, így a buffer nem változik minden kis módosításnál.
+
+#figure(
+  image("images/upper_bound.png",width:90%),
+  caption: [A Bézier-görbe ívhosszát felülről becsüli a kontrollpoligon hossza]
+) <upper_bound>
 
 == Görbe-koordinátarendszer kialakítása
 - törések kezelése
