@@ -157,7 +157,7 @@
 
 A számítógépes grafika számos területén, például a tervezőprogramokban, a vizualizációban és a játékokban, gyakran kell görbéket megjelenítenünk két és három dimenzióban. Interaktív alkalmazásokban a görbék paraméterei és a kamera helyzete folyamatosan változhat, a görbéktől pedig sokszor nemcsak egyszínű megjelenést, hanem szaggatott vagy pontozott mintázatot is elvárunk. A grafikus API-k és driverek által nyújtott vonalprimitívek erre nem adnak megfelelő eszközt: a viselkedésük API-nként és driverenként eltérhet, például a vonalvastagság nem mindenhol állítható.
 
-Dolgozatunkban egy általános célú módszert mutatok be a Bézier-görbék megjelenítésére. A görbék térben helyezkednek el, a vastagságukat képernyőtérben, pixelben adjuk meg, így az a kamerától való távolságtól független, és a görbéken mintázatot is megjeleníthetünk, amely a kamera mozgása közben is stabil marad. A megoldás csak olyan eszközökre épül, amelyek minden modern grafikus kártyán és API-ban elérhetők, ezért más grafikus API-kra is könnyen átültethető. A számítások nagy részét a GPU végzi, így a CPU terhelése minimális: 50 000 statikus görbe megjelenítésénél a CPU-idő képkockánként 0 ms, mivel a CPU-nak csak a shadereket kell elindítania. Animált görbéknél a CPU-időt a görbék adatainak feltöltése a GPU-ra határozza meg, ez 50000 görbénél TODO ms.
+Dolgozatunkban egy általános célú módszert mutatok be a Bézier-görbék megjelenítésére. A görbék térben helyezkednek el, a vastagságukat képernyőtérben, pixelben adjuk meg, így az a kamerától való távolságtól független, és a görbéken mintázatot is megjeleníthetünk, amely a kamera mozgása közben is stabil marad. A megoldás csak olyan eszközökre épül, amelyek minden modern grafikus kártyán és API-ban elérhetők, ezért más grafikus API-kra is könnyen átültethető. A számítások nagy részét a GPU végzi, így a CPU terhelése minimális: 50 000 statikus görbe megjelenítésénél a CPU-idő képkockánként 0 ms, mivel a CPU-nak csak a shadereket kell elindítania. Animált görbéknél a CPU-időt a görbék adatainak feltöltése a GPU-ra határozza meg, ez 50 000 görbénél 0,26 ms. Mivel egy görbe kontrollpoligonja négy darab float3-ból áll, ezért $50000 dot 48 "B"$ adatról van szó, és egy PCIe 3.0 x16 csatlakozás elméleti maximális feltöltési sebessége 15,75 GB/s, így a feltöltés 0,16 ms ideális esetben, ami a mért 0,26 ms 61 százaléka.
 
 //A háromdimenziós jelenetekben megjelenített görbék, például útvonalak, mérővonalak és CAD-rajzok, gyakran képernyőtérben állandó vastagságot, szaggatott vagy pontozott mintázatot és különféle végkupakokat igényelnek. A grafikus API-k vonalprimitívjei ezt csak korlátozottan támogatják, és a működésük API-nként, sőt driverenként is eltérhet. Ami az egyik eszközön működik, az a másikon hiányozhat vagy másképp jelenhet meg.
 
@@ -206,11 +206,11 @@ $ bold(B)'(t) = 3 [(1-t)^2 (bold(P)_1 - bold(P)_0) + 2(1-t)t (bold(P)_2 - bold(P
 
 A végpontokban ez $bold(B)'(0) = 3(bold(P)_1 - bold(P)_0)$ és $bold(B)'(1) = 3(bold(P)_3 - bold(P)_2)$, vagyis a görbe érintője a végpontokban a szomszédos kontrollponton halad át.
 
-Kutatáson során Bézier-görbék megjelenítésével foglalkoztam, azon belül is a harmadfokú Bézier-görbékkel, mivel:
+Kutatásom során Bézier-görbék megjelenítésével foglalkoztam, azon belül is a harmadfokú Bézier-görbékkel, mivel:
 - A Bézier-görbék a legelterjedtebbek a CAD- és a grafikai tervezőszoftverekben.
 - Az SVG specifikációja a másod- és a harmadfokú Bézier-görbéket tartalmazza.
-- Tetszőleges n-ed fokú polinom felírható n-ed fokú Bézier görbe kontrollpontjaival.
-- A pontok interpolására használt Catmull-Rom-, Hermite és B-spline szakaszai megegyeznek egy-egy harmadfokú Bézier görbével.
+- Tetszőleges n-ed fokú polinom felírható n-ed fokú Bézier-görbe kontrollpontjaival.
+- A pontok interpolálására használt Catmull-Rom-, Hermite- és B-spline szakaszai megegyeznek egy-egy harmadfokú Bézier-görbével.
 
 A Bézier-görbéknek további hasznos tulajdonságaik is vannak:
 - Konvex burok tulajdonság: a görbe minden pontja a kontrollpontok konvex burkán belül van.
@@ -240,8 +240,8 @@ QuadraticToCubic(P0, P1, P2) {
 Háromdimenziós görbék megjelenítésére több módszert vizsgáltam meg, ezeket három kategóriába sorolom: vonalprimitívre, vektorgrafikára és generált geometriára épülő módszerek. Mindegyiknél a következő szempontokat vizsgálom:
 - Távolságtól független vastagság, azaz a görbe vastagságát pixelekben adhatom meg.
 - Változtatható vastagság, azaz a vastagság értékét módosíthatom.
-- Mintázatok támogatása, azaz a görbe nem csak egy színből áll, hanem szaggatott vagy pontozott görbét is megjeleníthetek.
-- Térbeli használat, azaz a görbét nem csak egy síkban adhatom meg.
+- Mintázatok támogatása, azaz a görbe nemcsak egy színből áll, hanem szaggatott vagy pontozott görbét is megjeleníthetek.
+- Térbeli használat, azaz a görbét nemcsak egy síkban adhatom meg.
 - Portabilitás
 Más szempontok is vannak, például a színek és az átlátszóság kezelése, az élsimítás és a teljesítmény, de ezekre csak néhány helyen térek ki ebben a fejezetben.
 
@@ -249,7 +249,7 @@ Más szempontok is vannak, például a színek és az átlátszóság kezelése,
 
 Vonalprimitívvel egyenes szakaszokat rajzolhatok: ilyen például a `GL_LINE_STRIP`, a `D3DPT_LINESTRIP` és a `VK_PRIMITIVE_TOPOLOGY_LINE_STRIP`. A Bézier-görbét ezért pontokban értékelem ki, és a pontokat vonalprimitívvel kötöm össze. A kapott törtvonal annál pontosabban közelíti a görbét, minél több pontban értékelem ki.
 
-- `glLineStipple`: tizenhat bites bitmaszkkal és egy faktorral adom meg a raszterizált mintázatot. Nagy hátránya, hogy a legacy OpenGL fixed function pipeline része, amelyet a mai alkalmazások már nem használnak. Megjelenése hasonló, mint a Vulkan verzió @vs_segment_curve.
+- `glLineStipple`: tizenhat bites bitmaszkkal és egy faktorral adom meg a raszterizált mintázatot. Nagy hátránya, hogy a legacy OpenGL fixed function pipeline része, amelyet a mai alkalmazások már nem használnak. Megjelenése hasonló a Vulkan-verzióéhoz @vs_segment_curve.
 - `VK_KHR_line_rasterization`: gyakorlatilag a `glLineStipple` utódja egy modern API-ban. A bővítményt elsősorban CAD-alkalmazásokban használják. Ugyanúgy bitmaszkkal és faktorral adom meg a mintázatot, emellett a vonalraszterizációs algoritmust is kiválaszthatom. Nagy hátránya, hogy nem minden eszköz implementálja, vagy nem teljesen, lásd (@amd_impl_table). Emellett ez egy Vulkan-specifikus bővítmény.
 
 #figure(
@@ -271,7 +271,7 @@ Vonalprimitívvel egyenes szakaszokat rajzolhatok: ilyen például a `GL_LINE_ST
   caption: [AMD Radeon(TM) 610M (2022) által támogatott algoritmusok],
 ) <amd_impl_table>
 
-- Vertex és fragment shader: a legegyszerűbb megoldás, hogy a vertex shaderben kiszámolom a pont képernyőkoordinátáit, a fragment shaderben pedig az interpolált értékből meghatározom, mely fragmenteket dobom el. A mintázat nem megfelelő, mert a szegmensek hossza nem egyezik meg a mintázat hosszával @gl_segment_curve. Ezt kiküszöbölhetem úgy, hogy a CPU-n kiszámolom a görbe ívhosszát az adott pontig. Ezt viszont minden képkockánál újra kell számolnom, mert a mintázat képernyőtérben van, a kamera pedig mozoghat. Ha kiszámolom, a Vulkán verzióhozs hasonló ábrát kapok @vs_segment_curve.
+- Vertex és fragment shader: a legegyszerűbb megoldás, hogy a vertex shaderben kiszámolom a pont képernyőkoordinátáit, a fragment shaderben pedig az interpolált értékből meghatározom, mely fragmenteket dobom el. A mintázat nem megfelelő, mert a szegmensek hossza nem egyezik meg a mintázat hosszával @gl_segment_curve. Ezt kiküszöbölhetem úgy, hogy a CPU-n kiszámolom a görbe ívhosszát az adott pontig. Ezt viszont minden képkockánál újra kell számolnom, mert a mintázat képernyőtérben van, a kamera pedig mozoghat. Ha kiszámolom, a Vulkan-verzióhoz hasonló ábrát kapok @vs_segment_curve.
 
 #figure(
   image("images/gl_segment_curve_combined.png",width:100%),
@@ -283,7 +283,7 @@ Az ábrán (@vs_segment_curve) olyan hiba is látszik, hogy a szaggatások a gö
 Összefoglalva, a vonalprimitíveknek három nagy hátránya van a görbék rajzolásában:
 - A vonalvastagság nem biztosított: OpenGL core profilban az 1-nél nagyobb vastagság nem biztos, hogy működik, Vulkanban a vastag vonalhoz a választható `wideLines` funkcióra van szükség, a DX11-ben pedig egyáltalán nem adhatok meg vonalvastagságot.
 - A vertex és a fragment shader szempontjából a vonalnak nincs vastagsága. A vonal hossza mentén interpolált értékeket adhatok meg, a szélesség mentén nem. Ezért csak különböző szaggatásokat hozhatok létre, a görbe végét viszont nem tudom lekerekíteni.
-- Ha vastag vonalakból állítom össze a solid görbét, az nem szép (@line_solid_curve), mert a szegmenseket a két végpontjukon túl nem tudom meghosszabbítani, ezért az illesztéseknél rések maradnak. Ha szegmens végpontokat eltolom, akkor a sarkok nyúlnak túl a görbén.
+- Ha vastag vonalakból állítom össze a solid görbét, az nem szép (@line_solid_curve), mert a szegmenseket a két végpontjukon túl nem tudom meghosszabbítani, ezért az illesztéseknél rések maradnak. Ha a szegmensek végpontjait eltolom, akkor a sarkok túlnyúlnak a görbén.
 
 #figure(
   image("images/vk_curve_thick_solid.png",width:80%),
@@ -317,7 +317,7 @@ Ezeknél az interfészeknél egy másik probléma, hogy változó geometria megj
 
 #figure(
   image("images/spiral.png",width:30%),
-  caption: [Spirál több Bézer szegmenssel kirajzólva, ahol először a kék elemek lettek kirajzolva, majd a narancssárga elemek]
+  caption: [Spirál több Bézier-szegmenssel kirajzolva, ahol először a kék elemeket rajzoltam ki, majd a narancssárga elemeket]
 ) <spiral>
 
 //#figure(
@@ -341,7 +341,7 @@ Ennek a módszernek egy másik változata, hogy a sarkokat nem a pixel shaderben
 
 A két módszerrel az a problémám, hogy az átlátszóságot nem tudom jól kezelni, mert a görbe két szomszédos szegmense fedi egymást. Ezért a görbén olyan pontok jelennek meg, ahol az alpha blending során kétszer adom hozzá a görbe színét. Emellett a görbéknél gyakran alpha blendinggel valósítom meg az anti-aliasingot, ezért akkor is megjelenhetnek hibák, ha a görbe nem átlátszó.
 
-Ezeknek a módszereknek a hibáit úgy csökkentem, hogy a szegmensekre osztott görbét háromszögelem. Így elkerülöm, hogy két egymást követő szegmens fedje egymást. Ilyen háromszögelést használ az ImGui a CPU-n, Rye Terrell pedig a GPU-n. Az utóbbi megoldással olyan problémáim vannak, hogy a szegmenseket összekötő join egy külön drawcall, valamint az implementációjában nem kezel le minden esetet és így könnyen lehet olyan ábrát kétrehozni, ahol a háromszögelésnél nagy hiba keletkezik.
+Ezeknek a módszereknek a hibáit úgy csökkentem, hogy a szegmensekre osztott görbét háromszögelem. Így elkerülöm, hogy két egymást követő szegmens fedje egymást. Ilyen háromszögelést használ az ImGui a CPU-n, Rye Terrell pedig a GPU-n. Az utóbbi megoldással olyan problémáim vannak, hogy a szegmenseket összekötő join egy külön drawcall, valamint az implementációjában nem kezel le minden esetet, és így könnyen létre tudok hozni olyan ábrát, ahol a háromszögelésnél nagy hiba keletkezik.
 
 
 //Mivel a vonalprimitívekkel nem lehet szép vastag görbét létrehozni, ezért nekünk kell elkészítenünk a geometriát.
@@ -382,7 +382,7 @@ Ha veszek egy harminckettes felbontású görbét, akkor a Bézier-görbét harm
   caption: [Egy szegmens előállításához csak négy szomszédos pont szükséges]
 ) <4point_segment>
 
-Egy-egy szegmens csatlakozásnál maximum három pontot használok és azok három szomszédos ponttól függenek, ezért egyszerübb magugat a sarkokat venni. A sarkoknál négy plusz egy esetet különböztetek meg, és ezek befolyásolják a háromszögelést.
+Egy-egy szegmens csatlakozásánál maximum három pontot használok, és azok három szomszédos ponttól függenek, ezért egyszerűbb magukat a sarkokat venni. A sarkoknál négy plusz egy esetet különböztetek meg, és ezek befolyásolják a háromszögelést.
 - Egyenes eset: amikor három egymást követő pont egy egyenesbe esik.
 - Tompa szög: amikor a három egymást követő pont tompaszöget alkot. Ilyenkor a görbe szegmenseknél miter-csatlakozást alkalmazok.
 - Hegyes szög: amikor a három egymást követő pont hegyesszöget alkot. Ilyenkor a görbe szegmenseknél bevel-csatlakozást alkalmazok, pontosabban olyan bevelt, amelyet a vonalvastagság felével eltolok.
@@ -394,7 +394,7 @@ Egy-egy szegmens csatlakozásnál maximum három pontot használok és azok hár
   caption: [Háromszögelések esete]
 ) <triangulation>
 
-Először a háromdimenziós pontokat képernyő-koordinátarendszerbe képezem, mivel a görbék vastagságát pixelekben adom meg, és a háromszögelés is két dimenzióban történik. A $bold(p)$ világkoordinátájú pontból a nézeti-vetítési mátrixszal kapom az $(x, y, z, w)$ vágási koordinátát, majd a perspektív osztás után $(x\/w, y\/w)$ a $W times H$ méretű képernyőre képezem:
+Először a háromdimenziós pontokat képernyő-koordináta-rendszerbe képezem, mivel a görbék vastagságát pixelekben adom meg, és a háromszögelés is két dimenzióban történik. A $bold(p)$ világkoordinátájú pontból a nézeti-vetítési mátrixszal kapom az $(x, y, z, w)$ vágási koordinátát, majd a perspektív osztás után $(x\/w, y\/w)$ a $W times H$ méretű képernyőre képezem:
 
 $ bold(p)_"px" = (1/2 vec(x\/w, y\/w) + vec(1/2, 1/2)) * vec(W, H). $
 
@@ -406,7 +406,7 @@ $ bold(d)_"be" = (bold(C) - bold(Q)) / l_"be", quad bold(d)_"ki" = (bold(N) - bo
 
 Mindkét irányvektort 90 fokkal az óramutató járásával megegyező irányba forgatom, így kapom az $bold(r)_"be"$ és $bold(r)_"ki"$ normálvektort, ahol $bold(r) = (d_y, -d_x)$. Az $alpha$ fordulási szöget a $cos alpha = bold(d)_"be" dot bold(d)_"ki"$ összefüggés adja meg: $cos alpha = 1$ egyenes haladást, $cos alpha = -1$ teljes visszafordulást jelent. A fordulási szög nem a két szegmens által bezárt szög, hanem annak kiegészítője: a bezárt szög $180 degree - alpha$.
 
-A csúcs helye $bold(C) + h bold(o)$, ahol $bold(o)$ a félvastagság egységében mért eltolás. Az $s = plus.minus 1$ előjel megadja, hogy a csúcs a sarok saját koordinátarendszerében a jobb ($s = 1$: 0-s, 3-as és 4-es csúcs) vagy a bal oldalon ($s = -1$: 1-es és 2-es csúcs) van. Mivel a kezdőpontot visszafelé nézem, a 0-s és a 2-es csúcs fizikailag a görbe ugyanazon oldalára kerül, az 1-es és a 3-as pedig a másikra. A pixelben kapott eltolást végül normalizált eszközkoordinátává alakítom, és hozzáadom a sarok vetített helyéhez: $bold(C)_"NDC" + (2h) / vec(W, H) dot.o bold(o)$.
+A csúcs helye $bold(C) + h bold(o)$, ahol $bold(o)$ a félvastagság egységében mért eltolás. Az $s = plus.minus 1$ előjel megadja, hogy a csúcs a sarok saját koordináta-rendszerében a jobb ($s = 1$: 0-s, 3-as és 4-es csúcs) vagy a bal oldalon ($s = -1$: 1-es és 2-es csúcs) van. Mivel a kezdőpontot visszafelé nézem, a 0-s és a 2-es csúcs fizikailag a görbe ugyanazon oldalára kerül, az 1-es és a 3-as pedig a másikra. A pixelben kapott eltolást végül normalizált eszközkoordinátává alakítom, és hozzáadom a sarok vetített helyéhez: $bold(C)_"NDC" + (2h) / vec(W, H) dot.o bold(o)$.
 
 *Tompa szög* ($cos alpha >= 0$, azaz $alpha <= 90 degree$). Mindkét oldalon miter csatlakozást alkalmazok:
 
@@ -416,7 +416,7 @@ Mivel $|bold(r)_"be" + bold(r)_"ki"| = 2 cos(alpha/2)$ és $1 + cos alpha = 2 co
 
 *Egyenes eset* ($cos alpha = 1$). Ekkor $bold(r)_"be" = bold(r)_"ki"$, ezért a miter képlete $bold(m) = (2 bold(r)_"be") / 2 = bold(r)_"be"$-re egyszerűsödik, és a csúcsok a $bold(C) plus.minus h bold(r)_"be"$ pontokba kerülnek. A szegmens egy $l_"be" times 2h$ méretű téglalap, amelyet a két háromszög átlósan oszt ketté (@triangulation, első sor). Az egyenes esetet tehát nem kezelem külön, a tompa szög képletéből adódik.
 
-*Hegyes szög* ($cos alpha < 0$). Ahogy $alpha$ a 180 fokhoz közelít, $|bold(m)| = 1/cos(alpha/2)$ a végtelenhez tart, ezért a külső oldalon a miter csúcs túl messze kerülne a görbétől. A belső oldalon viszont a miter csúcs a görbén belül marad, ott továbbra is azt használom. A belső oldal az, amerre a görbe fordul: a sarok saját koordinátarendszerében a jobb oldal, ha $bold(r)_"ki" dot bold(d)_"be" < 0$. Legyen $sigma = 1$, ha a belső oldal a jobb, különben $sigma = -1$. A belső oldali csúcs eltolása
+*Hegyes szög* ($cos alpha < 0$). Ahogy $alpha$ a 180 fokhoz közelít, $|bold(m)| = 1/cos(alpha/2)$ a végtelenhez tart, ezért a külső oldalon a miter csúcs túl messze kerülne a görbétől. A belső oldalon viszont a miter csúcs a görbén belül marad, ott továbbra is azt használom. A belső oldal az, amerre a görbe fordul: a sarok saját koordináta-rendszerében a jobb oldal, ha $bold(r)_"ki" dot bold(d)_"be" < 0$. Legyen $sigma = 1$, ha a belső oldal a jobb, különben $sigma = -1$. A belső oldali csúcs eltolása
 
 $ bold(o) = sigma bold(m). $
 
@@ -428,7 +428,7 @@ A külső oldali csúcs tehát a befutó szegmens szélén, a sarkon $h tan(alph
 
 $ bold(o) = -sigma bold(r)_"be" + tan(alpha/4) bold(d)_"be", quad bold(o)_4 = -sigma bold(r)_"ki" - tan(alpha/4) bold(d)_"ki". $
 
-A $tan(alpha/4)$ értékét sem szögfüggvénnyel számolom: $cos(alpha/2) = bold(r)_"be" dot bold(b)$, és $tan(alpha/4) = sqrt((1 - cos(alpha/2)) / (1 + cos(alpha/2)))$. A $(2, 3, 4)$ háromszög, amelynek csúcsai a belső miter csúcs és a két külső pont, tölti ki a két szegmens közötti ékét (@triangulation, utolsó sor, kék). A következő szegmens kezdőpontjánál a saját koordinátarendszerében $bold(d)'_"be" = -bold(d)_"ki"$, $bold(r)'_"be" = -bold(r)_"ki"$, és a fordulás iránya is megfordul, azaz $sigma' = -sigma$. A külső csúcsa így $-sigma' bold(r)'_"be" + tan(alpha/4) bold(d)'_"be" = bold(o)_4$, vagyis pontosan a 4-es csúcsra esik. Mivel kezdőpontnál nincs 4-es csúcs, az éket csak a korábbi szegmens rajzolja ki, ezért ott sem marad rés, és nincs átfedés.
+A $tan(alpha/4)$ értékét sem szögfüggvénnyel számolom: $cos(alpha/2) = bold(r)_"be" dot bold(b)$, és $tan(alpha/4) = sqrt((1 - cos(alpha/2)) / (1 + cos(alpha/2)))$. A $(2, 3, 4)$ háromszög, amelynek csúcsai a belső miter csúcs és a két külső pont, tölti ki a két szegmens közötti éket (@triangulation, utolsó sor, kék). A következő szegmens kezdőpontjánál a saját koordináta-rendszerében $bold(d)'_"be" = -bold(d)_"ki"$, $bold(r)'_"be" = -bold(r)_"ki"$, és a fordulás iránya is megfordul, azaz $sigma' = -sigma$. A külső csúcsa így $-sigma' bold(r)'_"be" + tan(alpha/4) bold(d)'_"be" = bold(o)_4$, vagyis pontosan a 4-es csúcsra esik. Mivel kezdőpontnál nincs 4-es csúcs, az éket csak a korábbi szegmens rajzolja ki, ezért ott sem marad rés, és nincs átfedés.
 
 *Overlap*. A belső miter csúcs a sarokból mindkét szegmens mentén $h tan(alpha/2)$ távolságra hátrál. Ha ez nagyobb, mint a két szegmens közül a rövidebbik, azaz
 
@@ -450,11 +450,11 @@ A pixel shader a görbe alakját két interpolált koordinátából számolja. A
 */
 == Segment Clipping <segment_clipping>
 
-A háromszögelés képernyő koordináta rendszerben, a perspektív osztás után történik, ezért a szegmenst még az osztás előtt, látógúla alapján vágnom kell. A raszterizáló ugyan maga is vágja a háromszögeket, de a vertex shader már a $w$-vel osztott pontokkal számol és ha a vágást nem teszem meg, akkor hibás pontokkal számolnám.
+A háromszögelés képernyő-koordináta-rendszerben, a perspektív osztás után történik, ezért a szegmenst még az osztás előtt, látógúla alapján vágnom kell. A raszterizáló ugyan maga is vágja a háromszögeket, de a vertex shader már a $w$-vel osztott pontokkal számol, és ha a vágást nem teszem meg, akkor hibás pontokkal számolnék.
 
 #figure(
   image("images/why_need_clipping.png",width:70%),
-  caption: [Ha nem vágom el a szakoszokat a látógúla éleinél, akkor rosszak a vetített egyenesek a képernyő koordinátarendszerben.]
+  caption: [Ha nem vágom el a szakaszokat a látógúla éleinél, akkor rosszak a vetített egyenesek a képernyő-koordináta-rendszerben.]
 ) <why_clip>
 
 Egy $(x, y, z, w)$ koordinátájú pont a látógúlán belül van, ha mind a hat síktól mért távolsága nemnegatív. Az oldalsíkoknál ezek a távolságok
@@ -471,7 +471,7 @@ A vágás a Liang--Barsky-algoritmust követi @liang-barsky:
 
 A homogén koordinátákban végzett lineáris interpoláció a vetítés után is a szegmens egy pontját adja, ezért a vágott végpontokat ugyanúgy oszthatom el $w$-vel, mint az eredetieket. A többi görbe mentén interpolált értékeket, például a színt és az ívhosszokat is $t_0$ és $t_1$ paraméterrel interpolálom a két végpont között.
 
-A vágás a háromszögelést is befolyásolja. Ha $t_0 > 0$, akkor a szegmens kezdőpontját levágtam, és a kezdőpont előtti szomszédos pont már nem a sarok szomszédja; ugyanez igaz a végpontra, ha $t_1 < 1$. Ilyenkor úgy veszem, hogy abban a pontban végetért a görbe.
+A vágás a háromszögelést is befolyásolja. Ha $t_0 > 0$, akkor a szegmens kezdőpontját levágtam, és a kezdőpont előtti szomszédos pont már nem a sarok szomszédja; ugyanez igaz a végpontra, ha $t_1 < 1$. Ilyenkor úgy veszem, hogy abban a pontban véget ért a görbe.
 
 A szomszédos pontot nem vágom a szegmenssel együtt, mert abból csak az irányt használom. Ha viszont a közeli sík mögé esik, akkor a perspektív osztás után rossz irányt adna @why_clip, ezért a sarokpont felé húzom egészen a közeli síkig. A mélységi távolságokból számolom, hogy a sarokpont felé mekkora $t$ paraméternél éri el a síkot, és a szomszédos pontot $bold(N) + t (bold(C) - bold(N))$-re cserélem.
 
@@ -487,7 +487,7 @@ A Dotted és Patterned görbéknél mintázatot is számolok, és a mintázatokn
   caption: [Minimális kameramozgatással is drasztikusan változhat a mintázatok helye]
 ) <screen_space_pattern>
 
-Az utóbbi miatt egy másik megoldást implementáltam, ahol a minták távolságát világtérben adom meg. Így ahelyett, hogy a kamera mozgásával egyre több vagy kevesebb minta lenne a görbén, a minták összenyomódnak vagy széthúzódnak. Ennek a módszernek az a hátránya, hogy nem alkalmas olyan esetekre, amikor a kamera nagyon közel kerül a görbéhez, és éppen két minta közé esik. Abban az esetben sem ideális, ha nem akarunk minden görbénél külön mintatávolságot megadni. Cserébe mozgás közben stabilabb a mintázat, azaz nem mozdulnak el a mintázatok drasztikusan mozgás közben.
+Az utóbbi miatt egy másik megoldást implementáltam, ahol a minták távolságát világtérben adom meg. Így ahelyett, hogy a kamera mozgásával egyre több vagy kevesebb minta lenne a görbén, a minták összenyomódnak vagy széthúzódnak. Ennek a módszernek az a hátránya, hogy nem alkalmas olyan esetekre, amikor a kamera nagyon közel kerül a görbéhez, és éppen két minta közé esik. Abban az esetben sem ideális, ha nem akarok minden görbénél külön mintatávolságot megadni. Cserébe mozgás közben stabilabb a mintázat, azaz nem mozdulnak el a mintázatok drasztikusan mozgás közben.
 
 == Ívhosszak számolása
 
@@ -525,7 +525,7 @@ $ N(s) = cases(floor(s \/ d) + 1 & "ha" s > 0, 0 & "különben,") $
 
 akkor egy görbe mintáinak száma $N(s_"utolsó") - N(s_"első")$. Ezt minden görbére párhuzamosan kiszámolom, majd a darabszámokra egy exclusive prefix sumot futtatok, így megkapom, hogy a görbe mintái hányadik helytől kezdődnek a közös mintatömbben, a tömb utolsó eleme pedig az összes minta száma (@pattern_count).
 
-Az indexeket azért prefix summal számolom, és nem atomikus számlálóval foglalok helyet a mintáknak, mert így a minták sorrendje a tömbben determinisztikus, és megegyezik a görbék sorrendjével. A Patterned görbénél erre azért van szükségem, hogy kirajzoláskor az egymás melletti görbék mintái a tömbben is egymás mellett legyenek, így egy görbe pixelénél a szomszédos minták a szomszédos indexeken találhatók. A Dotted görbénél a minták sorrendje a kirajzolás sorrendje is. Mivel az élsimítást alpha blendinggel oldom meg, és abban az esetben ha a keverés nem sorrendfüggetlen, a minták sorrendje képkockáról képkockára változna, akkor az egymást fedő minták szélei vibrálnának.
+Az indexeket azért prefix summal számolom, és nem atomikus számlálóval foglalok helyet a mintáknak, mert így a minták sorrendje a tömbben determinisztikus, és megegyezik a görbék sorrendjével. A Patterned görbénél erre azért van szükségem, hogy kirajzoláskor az egymás melletti görbék mintái a tömbben is egymás mellett legyenek, így egy görbe pixelénél a szomszédos minták a szomszédos indexeken találhatók. A Dotted görbénél a minták sorrendje a kirajzolás sorrendje is. Mivel az élsimítást alpha blendinggel oldom meg, és abban az esetben, ha a keverés nem sorrendfüggetlen, a minták sorrendje képkockáról képkockára változna, akkor az egymást fedő minták szélei vibrálnának.
 
 #figure(
   image("images/pattern_count.png",width:90%),
@@ -551,11 +551,11 @@ Ehhez görbénként csak három vektor hosszát kell kiszámolnom, amit a görb�
   caption: [A Bézier-görbe ívhosszát felülről becsüli a kontrollpoligon hossza]
 ) <upper_bound>
 
-== Görbe-koordinátarendszer kialakítása
+== A görbe koordináta-rendszerének kialakítása
 
 Ahhoz, hogy mintát tudjak végighúzni a görbén, egy koordináta-rendszert kell kialakítanom a görbe mentén.
 Először a szegmensenkénti koordináta-rendszerekre van szükségem, hogy a görbe csúcsait le tudjam kerekíteni. Ebben az $Y$ koordináta a görbe hossza mentén, az $X$ koordináta pedig a görbére merőlegesen, a görbe szélessége mentén változik.
-Ettől a koordináta-rendszertől a következőket várom. Legyen megkülönböztethető a szakasz eleje és a vége és el tudjam dönteni, hogy a szakaszon belűl vagyok, így a Solid görbe végeinél el tudom dönteni, hogy melyik végkupakot kell használnom. Lehessen az $X$ koordináta alapján könnyen eldönteni, hogy az adott fragmens milyen messze van a görbétől.
+Ettől a koordináta-rendszertől a következőket várom. Legyen megkülönböztethető a szakasz eleje és a vége, és el tudjam dönteni, hogy a szakaszon belül vagyok, így a Solid görbe végeinél el tudom dönteni, hogy melyik végkupakot kell használnom. Lehessen az $X$ koordináta alapján könnyen eldönteni, hogy az adott fragmens milyen messze van a görbétől.
 
 Az $bold(A)$ és $bold(B)$ pont közötti szegmens koordináta-rendszerében a szegmens pontjainak $Y$ koordinátája a $[ 0, |bold(B) - bold(A)| ]$ tartományba esik; az $bold(A)$ előtti pontoké negatív, a $bold(B)$ utániaké pedig $|bold(B) - bold(A)|$-nál nagyobb. A görbe széle mentén az $X$ a $[-h, +h]$ tartományban van, így $|X|$ megadja a görbe középvonalától való távolságot (@segment_coordinate).
 
@@ -624,9 +624,9 @@ Az $Y < 0$ és az $Y > l$ tartomány nem mindig a görbe vége, lehet egy csatla
 
 // TODO Törések
 
-=== Mintázatok Szegmensek között
+=== Mintázatok szegmensek között
 
-A kiszámított koordináta rendszereknek a van egy olyan problémálya ha veszünk kettő egymást követő szegmens és nézzük hogy a gépontokban milyen ívhosszakat kapunk. Akkor látjuk, hogy a csúcsoban nem egyeznek meg. Emiatt a láthatóan megtörik a minta én nem csak eltorzul
+A kiszámított koordináta-rendszereknek van egy problémájuk: ha veszek két egymást követő szegmenst, és megnézem, hogy a közös pontban milyen ívhosszakat kapok, akkor azt látom, hogy a csúcsban nem egyeznek meg. Emiatt a minta láthatóan megtörik, és nem csupán eltorzul.
 
 = Összekapcsolt görbék
 
