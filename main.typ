@@ -146,6 +146,23 @@
 
 #outline()
 
+= Abstract
+
+// Tématerületn fontos..
+// Királyi többes
+// 3D működik
+// Mozgás
+// Mire készül általános implementáció.
+// Teljesítmény számok is lehetnek.
+
+A számítógépes grafika számos területén, például a tervezőprogramokban, a vizualizációban és a játékokban, gyakran kell görbéket megjelenítenünk két és három dimenzióban. Interaktív alkalmazásokban a görbék paraméterei és a kamera helyzete folyamatosan változhat, a görbéktől pedig sokszor nemcsak egyszínű megjelenést, hanem szaggatott vagy pontozott mintázatot is elvárunk. A grafikus API-k és driverek által nyújtott vonalprimitívek erre nem adnak megfelelő eszközt: a viselkedésük API-nként és driverenként eltérhet, például a vonalvastagság nem mindenhol állítható.
+
+Dolgozatunkban egy általános célú módszert mutatok be a Bézier-görbék megjelenítésére. A görbék térben helyezkednek el, a vastagságukat képernyőtérben, pixelben adjuk meg, így az a kamerától való távolságtól független, és a görbéken mintázatot is megjeleníthetünk, amely a kamera mozgása közben is stabil marad. A megoldás csak olyan eszközökre épül, amelyek minden modern grafikus kártyán és API-ban elérhetők, ezért más grafikus API-kra is könnyen átültethető. A számítások nagy részét a GPU végzi, így a CPU terhelése minimális: 50 000 statikus görbe megjelenítésénél a CPU-idő képkockánként 0 ms, mivel a CPU-nak csak a shadereket kell elindítania. Animált görbéknél a CPU-időt a görbék adatainak feltöltése a GPU-ra határozza meg, ez 50000 görbénél TODO ms.
+
+//A háromdimenziós jelenetekben megjelenített görbék, például útvonalak, mérővonalak és CAD-rajzok, gyakran képernyőtérben állandó vastagságot, szaggatott vagy pontozott mintázatot és különféle végkupakokat igényelnek. A grafikus API-k vonalprimitívjei ezt csak korlátozottan támogatják, és a működésük API-nként, sőt driverenként is eltérhet. Ami az egyik eszközön működik, az a másikon hiányozhat vagy másképp jelenhet meg.
+
+//Szakdolgozatomban egy olyan módszert mutatok be Bézier-görbék megjelenítésére, amely nem a vonalprimitívekre épül, hanem a görbék geometriáját GPU-n állítom elő. Ehhez csak olyan általános eszközöket használok, mint a vertex, pixel és compute shaderek, amelyek minden modern grafikus API-ban elérhetők. Így a módszer nem függ egy adott API bővítményeitől vagy a driver implementációjától. A számítások nagy részét a GPU végzi, így a CPU munkáját tudom minimalizálni. Ennek köszönhetően a CPU-használat a görbék számától és alakjától függetlenül alacsony marad.
+
 = Bevezetés <intro>
 
 // Munkám során ahhoz, hogy a Bézier görbéket megjelenítsem a vonalprimitívet cserélem le, ez alatt azt értem, hogy nem a grafikus API-k által kínált vonalprimitíveket használom. Például: GL_LINE_STRIP, D3DPT_LINESTRIP, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
@@ -176,7 +193,12 @@ A de Casteljau-algoritmussal lineáris interpolációk sorozatával számolom ki
 
 $ bold(P)_i^((k)) = (1-t) bold(P)_i^((k-1)) + t bold(P)_(i+1)^((k-1)), $
 
-és a görbe pontja $bold(B)(t) = bold(P)_0^((n))$. A közbenső pontokkal a görbét a $t$ helyen két Bézier-görbére oszthatom, és ezek kontrollpontjai éppen a $bold(P)_0^((k))$, illetve a $bold(P)_k^((n-k))$ pontok.
+és a görbe pontja $bold(B)(t) = bold(P)_0^((n))$. A közbenső pontokkal a görbét a $t$ helyen két Bézier-görbére oszthatom, és ezek kontrollpontjai éppen a $bold(P)_0^((k))$, illetve a $bold(P)_k^((n-k))$ pontok (@de_casteljau).
+
+#figure(
+  image("images/bezier_decasteljau.png", width: 70%),
+  caption: [A de Casteljau-algoritmus lépései harmadfokú görbén, $t = 1/2$ mellett. Pontozott vonal: a kontrollpoligon, pont-vonal: az első, szaggatott: a második interpolációs lépés. A szaggatott szakaszon lévő pont $bold(B)(1/2)$.]
+) <de_casteljau>
 
 A harmadfokú görbe deriváltja:
 
@@ -184,10 +206,11 @@ $ bold(B)'(t) = 3 [(1-t)^2 (bold(P)_1 - bold(P)_0) + 2(1-t)t (bold(P)_2 - bold(P
 
 A végpontokban ez $bold(B)'(0) = 3(bold(P)_1 - bold(P)_0)$ és $bold(B)'(1) = 3(bold(P)_3 - bold(P)_2)$, vagyis a görbe érintője a végpontokban a szomszédos kontrollponton halad át.
 
-Munkám során Bézier-görbék megjelenítésével foglalkozom, azon belül is a harmadfokú Bézier-görbékkel. Ezt a döntést három érvvel indokolom:
+Kutatáson során Bézier-görbék megjelenítésével foglalkoztam, azon belül is a harmadfokú Bézier-görbékkel, mivel:
 - A Bézier-görbék a legelterjedtebbek a CAD- és a grafikai tervezőszoftverekben.
 - Az SVG specifikációja a másod- és a harmadfokú Bézier-görbéket tartalmazza.
-- Több más görbét is át tudok írni Bézier-görbévé: tetszőleges n-ed fokú polinomot fel tudok írni n-ed fokú Bézier-görbeként, a harmadfokú Catmull-Rom spline, Hermite spline és B-spline szakaszai pedig pontosan megegyeznek egy-egy harmadfokú Bézier-görbével.
+- Tetszőleges n-ed fokú polinom felírható n-ed fokú Bézier görbe kontrollpontjaival.
+- A pontok interpolására használt Catmull-Rom-, Hermite és B-spline szakaszai megegyeznek egy-egy harmadfokú Bézier görbével.
 
 A Bézier-görbéknek további hasznos tulajdonságaik is vannak:
 - Konvex burok tulajdonság: a görbe minden pontja a kontrollpontok konvex burkán belül van.
@@ -197,80 +220,75 @@ A Bézier-görbéknek további hasznos tulajdonságaik is vannak:
 
 A fokszámemelés miatt elég a harmadfokú Bézier-görbék megjelenítését megvalósítanom: a lineáris és a másodfokú görbét harmadfokú alakra írom át, és ugyanúgy rajzolom ki.
 
-```cpp
-std::array<Vec3, 4> LinearToCubic(Vec3 p0, Vec3 p1) {
-    return {
-        p0,
-        (2.0 * p0 + p1) / 3.0,
-        (p0 + 2.0 * p1) / 3.0,
-        p1,
-    };
-}
+```
+LinearToCubic(P0, P1)
+    P0' = P0
+    P1' = (2.0 * P0 + P1) / 3.0
+    P2' = (P0 + 2.0 * P1) / 3.0
+    P3' = P1
 
-std::array<Vec3, 4> QuadraticToCubic(Vec3 p0, Vec3 p1, Vec3 p2) {
-    return {
-        p0,
-        (p0 + 2.0 * p1) / 3.0,
-        (2.0 * p1 + p2) / 3.0,
-        p2,
-    };
+QuadraticToCubic(P0, P1, P2) {
+    P0' = P0
+    P1' = (P0 + 2.0 * P1) / 3.0
+    P2' = (2.0 * P1 + P2) / 3.0
+    P3' = P2
 }
 ```
 
 == Jelenlegi módszerek
 
-Háromdimenziós görbék megjelenítésére több módszert megvizsgáltam, és három kategóriába soroltam őket: vonalprimitívre, vektorgrafikára és generált geometriára épülő módszerek. Mindegyiknél a következő szempontokat vizsgálom:
+Háromdimenziós görbék megjelenítésére több módszert vizsgáltam meg, ezeket három kategóriába sorolom: vonalprimitívre, vektorgrafikára és generált geometriára épülő módszerek. Mindegyiknél a következő szempontokat vizsgálom:
 - Távolságtól független vastagság, azaz a görbe vastagságát pixelekben adhatom meg.
 - Változtatható vastagság, azaz a vastagság értékét módosíthatom.
 - Mintázatok támogatása, azaz a görbe nem csak egy színből áll, hanem szaggatott vagy pontozott görbét is megjeleníthetek.
 - Térbeli használat, azaz a görbét nem csak egy síkban adhatom meg.
 - Portabilitás
-Más szempontok is vannak, például a színek és az átlátszóság kezelése, az anti-aliasing és a teljesítmény, de ezekre csak néhány helyen térek ki ebben a fejezetben.
+Más szempontok is vannak, például a színek és az átlátszóság kezelése, az élsimítás és a teljesítmény, de ezekre csak néhány helyen térek ki ebben a fejezetben.
 
 === Vonalprimitíven alapuló módszerek
 
 Vonalprimitívvel egyenes szakaszokat rajzolhatok: ilyen például a `GL_LINE_STRIP`, a `D3DPT_LINESTRIP` és a `VK_PRIMITIVE_TOPOLOGY_LINE_STRIP`. A Bézier-görbét ezért pontokban értékelem ki, és a pontokat vonalprimitívvel kötöm össze. A kapott törtvonal annál pontosabban közelíti a görbét, minél több pontban értékelem ki.
 
-- `glLineStipple`: tizenhat bites bitmaszkkal és egy faktorral adom meg a raszterizált mintázatot. Nagy hátránya, hogy a legacy OpenGL fixed function pipeline része, amelyet a mai alkalmazások már nem használnak. Az /*@vs_segment_curve*/ ábrán látható, hogyan néz ki az eredmény.
-- `VK_KHR_line_rasterization`: gyakorlatilag a `glLineStipple` utódja egy modern API-ban. A bővítményt elsősorban CAD-alkalmazásokban használják. Ugyanúgy bitmaszkkal és faktorral adom meg a mintázatot, emellett a vonalraszterizációs algoritmust is kiválaszthatom. Nagy hátránya, hogy nem minden eszköz implementálja, vagy nem teljesen, lásd /*@amd_impl_table*/. Emellett ez egy Vulkan-specifikus bővítmény.
+- `glLineStipple`: tizenhat bites bitmaszkkal és egy faktorral adom meg a raszterizált mintázatot. Nagy hátránya, hogy a legacy OpenGL fixed function pipeline része, amelyet a mai alkalmazások már nem használnak. Megjelenése hasonló, mint a Vulkan verzió @vs_segment_curve.
+- `VK_KHR_line_rasterization`: gyakorlatilag a `glLineStipple` utódja egy modern API-ban. A bővítményt elsősorban CAD-alkalmazásokban használják. Ugyanúgy bitmaszkkal és faktorral adom meg a mintázatot, emellett a vonalraszterizációs algoritmust is kiválaszthatom. Nagy hátránya, hogy nem minden eszköz implementálja, vagy nem teljesen, lásd (@amd_impl_table). Emellett ez egy Vulkan-specifikus bővítmény.
 
-//#figure(
-//  image("images/vk_segment_curve_combined.png",width:100%),
-//  caption: [VK_KHR_line_rasterization (SmoothLine) használatával megjelenített szegmens és görbe.]
-//) <vs_segment_curve>
+#figure(
+  image("images/vk_segment_curve_combined.png",width:100%),
+  caption: [VK_KHR_line_rasterization (SmoothLine) használatával megjelenített szegmens és görbe.]
+) <vs_segment_curve>
 
-//#figure(
-//  table(
-//    columns: 2,
-//    [Algoritmus], [Implementált],
-//    [bresenhamLines], [Igen],
-//    [rectangularLines], [Nem],
-//    [smoothLines], [Nem],
-//    [stippledBresenhamLines], [Igen],
-//    [stippledRectangularLines], [Nem],
-//    [stippledSmoothLines], [Nem]
-//  ),
-//  caption: [AMD Radeon(TM) 610M (2022) által támogatott algoritmusok],
-//) <amd_impl_table>
+#figure(
+  table(
+    columns: 2,
+    [Algoritmus], [Implementált],
+    [bresenhamLines], [Igen],
+    [rectangularLines], [Nem],
+    [smoothLines], [Nem],
+    [stippledBresenhamLines], [Igen],
+    [stippledRectangularLines], [Nem],
+    [stippledSmoothLines], [Nem]
+  ),
+  caption: [AMD Radeon(TM) 610M (2022) által támogatott algoritmusok],
+) <amd_impl_table>
 
-- Vertex és fragment shader: a legegyszerűbb megoldás, hogy a vertex shaderben kiszámolom a pont képernyőkoordinátáit, a fragment shaderben pedig az interpolált értékből meghatározom, mely fragmenteket dobom el. Az /*@gl_segment_curve*/ ábrán látszik, hogy a mintázat nem megfelelő, mert a szegmensek hossza nem egyezik meg a mintázat hosszával. Ezt kiküszöbölhetem úgy, hogy a CPU-n kiszámolom a görbe ívhosszát az adott pontig. Ezt viszont minden képkockánál újra kell számolnom, mert a mintázat képernyőtérben van, a kamera pedig mozoghat. Ha kiszámolom, a /*@vs_segment_curve*/ ábrához hasonló görbét kapok.
+- Vertex és fragment shader: a legegyszerűbb megoldás, hogy a vertex shaderben kiszámolom a pont képernyőkoordinátáit, a fragment shaderben pedig az interpolált értékből meghatározom, mely fragmenteket dobom el. A mintázat nem megfelelő, mert a szegmensek hossza nem egyezik meg a mintázat hosszával @gl_segment_curve. Ezt kiküszöbölhetem úgy, hogy a CPU-n kiszámolom a görbe ívhosszát az adott pontig. Ezt viszont minden képkockánál újra kell számolnom, mert a mintázat képernyőtérben van, a kamera pedig mozoghat. Ha kiszámolom, a Vulkán verzióhozs hasonló ábrát kapok @vs_segment_curve.
 
-//#figure(
-//  image("images/gl_segment_curve_combined.png",width:100%),
-//  caption: [Vertex és fragment shader használatával megjelenített szegmens és görbe.]
-//) <gl_segment_curve>
+#figure(
+  image("images/gl_segment_curve_combined.png",width:100%),
+  caption: [Vertex és fragment shader használatával megjelenített szegmens és görbe.]
+) <gl_segment_curve>
 
-Az /*@vs_segment_curve*/ ábrán olyan hiba is látszik, hogy a szaggatások a görbületnél rossz irányba állnak, és keresztezik egymást. Ez azért történik, mert a görbe egyenes szakaszokból áll, és a szaggatásos mintázat merőleges ezekre a szakaszokra.
+Az ábrán (@vs_segment_curve) olyan hiba is látszik, hogy a szaggatások a görbületnél rossz irányba állnak, és keresztezik egymást. Ez azért történik, mert a görbe egyenes szakaszokból áll, és a szaggatásos mintázat merőleges ezekre a szakaszokra.
 
 Összefoglalva, a vonalprimitíveknek három nagy hátránya van a görbék rajzolásában:
 - A vonalvastagság nem biztosított: OpenGL core profilban az 1-nél nagyobb vastagság nem biztos, hogy működik, Vulkanban a vastag vonalhoz a választható `wideLines` funkcióra van szükség, a DX11-ben pedig egyáltalán nem adhatok meg vonalvastagságot.
 - A vertex és a fragment shader szempontjából a vonalnak nincs vastagsága. A vonal hossza mentén interpolált értékeket adhatok meg, a szélesség mentén nem. Ezért csak különböző szaggatásokat hozhatok létre, a görbe végét viszont nem tudom lekerekíteni.
-- Ha vastag vonalakból állítom össze a solid görbét, az nem szép /*@line_solid_curve*/, mert a szegmenseket a két végpontjukon túl nem tudom meghosszabbítani, ezért az illesztéseknél rések maradnak. Ha szegmens végpontokat eltolom, akkor a sarkok nyúlnak túl a görbén.
+- Ha vastag vonalakból állítom össze a solid görbét, az nem szép (@line_solid_curve), mert a szegmenseket a két végpontjukon túl nem tudom meghosszabbítani, ezért az illesztéseknél rések maradnak. Ha szegmens végpontokat eltolom, akkor a sarkok nyúlnak túl a görbén.
 
-//#figure(
-//  image("images/vk_curve_thick_solid.png",width:80%),
-//  caption: [Vastag görbe vonalprimitívekkel kirajzolva]
-//) <line_solid_curve>
+#figure(
+  image("images/vk_curve_thick_solid.png",width:80%),
+  caption: [Vastag görbe vonalprimitívekkel kirajzolva]
+) <line_solid_curve>
 
 // One large after every one
 //A módszereket a @line_table táblázat foglalja össze a fejezet elején felsorolt szempontok //szerint.
@@ -516,7 +534,7 @@ Az indexeket azért prefix summal számolom, és nem atomikus számlálóval fog
 
 Ezután minden mintához megkeresem, melyik szegmensre esik. Mivel az $s_i$ ívhosszak egy görbén belül monoton nőnek, ezt bináris kereséssel teszem a görbe mintavételi pontjai között. A megtalált szegmensen belül a világtérbeli ívhossz alapján interpolálom a képernyőtérbeli ívhosszat, és ezt tárolom el a minta helyeként. Görbénként több szál dolgozik, mindegyik a görbe mintáinak egy részét számolja.
 
-A mintatömb méretét viszont nem tudom a GPU-n meghatározni. A GPU-n nem tudok memóriát foglalni, a buffert előre, a CPU-n kell lefoglalnom. A pontos mintaszámot a GPU számolja ki, ennek visszaolvasása viszont várakoztatná a CPU-t a GPU-ra, ami pont azt a szinkronizációt vezetné be, amit el szeretnék kerülni. Ezért a CPU-n felülről becsülöm, hogy egy görbének legfeljebb hány mintája lehet. Mivel ezt minden alkalommal újra kell számolnom, amikor egy görbe alakja vagy mintatávolsága változik, a becslésnek gyorsnak kell lennie: nem értékelhetem ki a görbét, és nem számolhatok ívhosszat.
+A mintatömb méretét viszont nem tudom a GPU-n meghatározni. A GPU-n nem tudok memóriát foglalni, a buffert előre, a CPU-n kell lefoglalnom. A pontos mintaszámot a GPU számolja ki, ennek visszaolvasása viszont várakoztatná a CPU-t a GPU-ra, amit el szeretnék kerülni. Ezért a CPU-n felülről becsülöm, hogy egy görbének legfeljebb hány mintája lehet. Mivel ezt minden alkalommal újra kell számolnom, amikor egy görbe alakja vagy mintatávolsága változik, a becslésnek gyorsnak kell lennie: nem értékelhetem ki a görbét, és nem számolhatok ívhosszat.
 
 A felső becsléshez a Bézier-görbe ívhosszát a kontrollpoligon hosszával becsülöm (@upper_bound). A harmadfokú görbe deriváltja $bold(B)'(t) = 3 sum_(i=0)^2 b_(i,2)(t) bold(d)_i$, ahol $bold(d)_i = bold(P)_(i+1) - bold(P)_i$. A háromszög-egyenlőtlenség és $integral_0^1 b_(i,2)(t) dif t = 1/3$ miatt
 
@@ -534,9 +552,81 @@ Ehhez görbénként csak három vektor hosszát kell kiszámolnom, amit a görb�
 ) <upper_bound>
 
 == Görbe-koordinátarendszer kialakítása
-- törések kezelése
-- SDF (megemlíteni, hogy lehet textúrázni)
-- Csillag
+
+Ahhoz, hogy mintát tudjak végighúzni a görbén, egy koordináta-rendszert kell kialakítanom a görbe mentén.
+Először a szegmensenkénti koordináta-rendszerekre van szükségem, hogy a görbe csúcsait le tudjam kerekíteni. Ebben az $Y$ koordináta a görbe hossza mentén, az $X$ koordináta pedig a görbére merőlegesen, a görbe szélessége mentén változik.
+Ettől a koordináta-rendszertől a következőket várom. Legyen megkülönböztethető a szakasz eleje és a vége és el tudjam dönteni, hogy a szakaszon belűl vagyok, így a Solid görbe végeinél el tudom dönteni, hogy melyik végkupakot kell használnom. Lehessen az $X$ koordináta alapján könnyen eldönteni, hogy az adott fragmens milyen messze van a görbétől.
+
+Az $bold(A)$ és $bold(B)$ pont közötti szegmens koordináta-rendszerében a szegmens pontjainak $Y$ koordinátája a $[ 0, |bold(B) - bold(A)| ]$ tartományba esik; az $bold(A)$ előtti pontoké negatív, a $bold(B)$ utániaké pedig $|bold(B) - bold(A)|$-nál nagyobb. A görbe széle mentén az $X$ a $[-h, +h]$ tartományban van, így $|X|$ megadja a görbe középvonalától való távolságot (@segment_coordinate).
+
+#figure(
+  image("images/segment_coordinate.png",width:90%),
+  caption: [Az $bold(A)$ és $bold(B)$ közötti szegmens koordináta-rendszere]
+) <segment_coordinate>
+
+=== A koordináták kiszámítása
+
+A koordinátákat a vertex shaderben számolom, ugyanazokból a pixelbe vetített pontokból, amelyekből a háromszögelést is. Legyen $bold(A) = bold(P)_i$ és $bold(B) = bold(P)_(i+1)$ a szegmens vágott, pixelbe vetített kezdő- és végpontja, $l = |bold(B) - bold(A)|$ a szegmens képernyőtérbeli hossza, és
+
+$ bold(t) = (bold(B) - bold(A)) / l, quad bold(n) = (-t_y, t_x) $
+
+a szegmens iránya, illetve az óramutató járásával ellentétes irányba forgatott normálisa. A szegmens koordináta-rendszere az $bold(A)$ origójú, $(bold(n), bold(t))$ ortonormált bázisú derékszögű koordináta-rendszer, a képernyő egy $bold(x)$ pontjának koordinátái tehát
+
+$ X(bold(x)) = (bold(x) - bold(A)) dot bold(n), quad Y(bold(x)) = (bold(x) - bold(A)) dot bold(t). $
+
+Mindkét koordináta a képernyőpont affin függvénye. A raszterizáló a csúcsokban megadott értékeket a háromszögön belül lineárisan interpolálja, egy affin függvényt pedig a háromszög három csúcsában felvett értékeiből pontosan visszakap. Ha tehát minden csúcsnál a csúcs saját helyén kiértékelt $X$ és $Y$ értéket adom tovább, akkor a pixel shader minden fragmensnél a fragmens pontos koordinátáit kapja meg. Ez nemcsak a szegmens téglalapjában igaz, hanem a sarkon túl meghosszabbított részben és a csatlakozást kitöltő ékben is, ezért a pixel shadernek nem kell tudnia, melyik háromszögelési eset szerint készült a szegmens. Mivel a koordinátákat képernyőtérben számoltam, a képernyőtérben lineáris interpolációra van szükségem, ezért mindkettőt perspektív korrekció nélkül (`noperspective`) interpolálom.
+
+A csúcsok helye az előző fejezet jelöléseivel $bold(C) + h bold(o)$, ahol $bold(C)$ a csúcs sarka. A kezdőpont csúcsainál (0, 1) $bold(C) = bold(A)$, és mivel ott a szegmenst visszafelé járom be, $bold(d)_"be" = -bold(t)$ és $bold(r)_"be" = bold(n)$. A végpont csúcsainál (2, 3, 4) $bold(C) = bold(B)$, $bold(d)_"be" = bold(t)$ és $bold(r)_"be" = -bold(n)$. A fenti képletbe behelyettesítve a hossz menti koordináta
+
+$ Y = cases(-h (bold(o) dot bold(d)_"be") & "a kezdőpont csúcsainál,", l + h (bold(o) dot bold(d)_"be") & "a végpont csúcsainál.") $
+
+Mindkét esetben $h (bold(o) dot bold(d)_"be")$ azt adja meg, hogy a csúcs mennyivel nyúlik túl a szegmens saját végén. Az overlap esetben és a görbe végén $bold(o) dot bold(d)_"be" = 1$, ezért ott $Y = -h$, illetve $Y = l + h$, a meghosszabbított részben tehát $Y < 0$, illetve $Y > l$.
+
+Az oldalirányú koordináta ugyanígy $X = h (bold(o) dot bold(r)_"be")$ a kezdőpont és $X = -h (bold(o) dot bold(r)_"be")$ a végpont csúcsainál. A 0--3. csúcsnál azonban ezt nem kell kiszámolnom, mert a háromszögelés minden esetében $bold(o) dot bold(r)_"be" = s$:
+- Miter csatlakozásnál $bold(o) = s bold(m)$, és mivel $bold(r)_"be" dot bold(r)_"ki" = bold(d)_"be" dot bold(d)_"ki" = cos alpha$, ezért $bold(m) dot bold(r)_"be" = (1 + cos alpha) / (1 + cos alpha) = 1$. A miter csúcs tehát a két szegmens eltolt szélének metszéspontjaként mindkét szegmens szélére esik.
+- Hegyes szögnél a belső csúcs ugyanez a miter csúcs, a külső csúcs eltolása $-sigma bold(r)_"be" + tan(alpha/4) bold(d)_"be"$, amelynek vetülete $-sigma$, vagyis a külső oldal előjele.
+- Overlap esetben és a görbe végén $bold(o) = bold(d)_"be" + s bold(r)_"be"$, amelynek vetülete $s$.
+
+Ezért a 0-s és 2-es csúcsnál $X = h$, az 1-es és 3-as csúcsnál $X = -h$, a vertex shader ezt a csúcs indexéből közvetlenül beállítja. Ez összhangban van azzal, hogy a 0-s és 2-es csúcs fizikailag a görbe ugyanazon oldalára kerül. Az egyetlen kivétel a hegyes szögű bevel 4-es csúcsa, amely nem a szegmens, hanem a kifutó szegmens szélén van, ezért ott a vetületet ki kell számolnom: $X_4 = -h (bold(o)_4 dot bold(r)_"be")$. Itt az előjelre is figyelnem kell. A pixel shader ugyan csak $|X|$-et használja, de az abszolút értéket az interpoláció után veszi, ezért ha a 4-es csúcs ellentétes előjelkonvenciót követne, a $(2, 3, 4)$ háromszögben hibás értékeket interpolálnék.
+
+Az $X$ és $Y$ koordinátából már meghatározható a fragmens távolsága a szegmens középvonalától, azaz az $bold(A) bold(B)$ szakasztól. Ha
+
+$ e = max(-Y, Y - l) $
+
+a szegmens végein való túlnyúlás, akkor a távolság
+
+$ delta = cases(|X| & "ha" e <= 0, sqrt(X^2 + e^2) & "különben.") $
+
+A $delta - h$ előjeles távolság negatív a vonalon belül és pozitív azon kívül. Kerek csatlakozásnál ez a $bold(C)$ középpontú, $h$ sugarú félkört adja meg, és mivel a sarokban találkozó két szegmens ugyanabban a pontban, ugyanakkora sugárral kerekít, a csatlakozás folytonos. Az $e > 0$ tartományban az $Y$ előjele dönti el, hogy a fragmens a szegmens elején ($Y < 0$) vagy a végén ($Y > l$) nyúlik túl, vagyis melyik végkupakot kell alkalmaznom.
+
+=== A pixel shadernek átadott értékek
+
+A pixel shader a koordinátákon kívül néhány, a szegmensen belül állandó értéket is megkap (@segment_outputs). Az $X$, $Y$, $h$ és $l$ értéket egy `float4`-be csomagolva adom tovább. A $h$ és $l$ a szegmens minden csúcsában azonos, ezért az interpoláció nem változtat rajtuk, így nem kell külön interpolálatlan változót foglalnom nekik.
+
+#figure(
+  table(
+    columns: 3,
+    align: (left, left, left),
+    [Érték], [Interpoláció], [Jelentés],
+    [$X$], [`noperspective`], [oldalirányú koordináta, a sáv két szélén $plus.minus h$],
+    [$Y$], [`noperspective`], [hossz menti koordináta, $bold(A)$-ban 0, $bold(B)$-ben $l$],
+    [$h$], [állandó], [a vonal félvastagsága pixelben],
+    [$l$], [állandó], [a vágott szegmens képernyőtérbeli hossza],
+    [szín], [`noperspective`], [a végpontok színe között interpolálva],
+    [kupak és csatlakozás], [`nointerpolation`], [elülső és hátsó kupak, csatlakozás típusa egy `uint`-be csomagolva],
+    [szomszédok (Solid)], [`nointerpolation`], [van-e szomszédos szegmens a kezdő-, illetve a végpontnál],
+    [ívhossz a görbe elején és végén (Patterned)], [`nointerpolation`], [$bold(A)$ képernyőtérbeli ívhossza és a görbe utolsó pontjának ívhossza],
+  ),
+  caption: [A vertex shader által a pixel shadernek átadott, a szegmens koordináta-rendszeréhez tartozó értékek]
+) <segment_outputs>
+
+Az $Y < 0$ és az $Y > l$ tartomány nem mindig a görbe vége, lehet egy csatlakozás túlnyúló része is. A Solid görbénél ezt a két szomszédjelző dönti el: ha $Y < 0$ és a kezdőpontnál nincs szomszédos szegmens, akkor a fragmensre az elülső kupak, ha $Y > l$ és a végpontnál nincs szomszéd, akkor a hátsó kupak vonatkozik, minden más esetben a csatlakozás. A Patterned görbénél a szegmens koordinátáját a görbe ívhosszává alakítom: $s = s_bold(A) + Y$, ahol $s_bold(A)$ a kezdőpont képernyőtérbeli ívhossza a prefix sum eredményéből. A fragmens a görbe elé esik, ha $s < 0$, és mögé, ha $s$ nagyobb a görbe utolsó pontjának ívhosszánál. Mivel a vágásnál az ívhosszakat is $t_0$ és $t_1$ paraméterrel interpolálom, $s_bold(A)$ a vágott kezdőpont ívhossza, így a vágott szegmensnél is helyes értéket kapok. Ugyanezt az $s$ értéket használom a mintázat kiszámításához is, ezért a mintázat a szegmensek határán folytonos a görbe középvonala mentén.
+
+// TODO Törések
+
+=== Mintázatok Szegmensek között
+
+A kiszámított koordináta rendszereknek a van egy olyan problémálya ha veszünk kettő egymást követő szegmens és nézzük hogy a gépontokban milyen ívhosszakat kapunk. Akkor látjuk, hogy a csúcsoban nem egyeznek meg. Emiatt a láthatóan megtörik a minta én nem csak eltorzul
 
 = Összekapcsolt görbék
 
