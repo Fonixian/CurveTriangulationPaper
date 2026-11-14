@@ -475,9 +475,6 @@ A vágás a háromszögelést is befolyásolja. Ha $t_0 > 0$, akkor a szegmens k
 
 A szomszédos pontot nem vágom a szegmenssel együtt, mert abból csak az irányt használom. Ha viszont a közeli sík mögé esik, akkor a perspektív osztás után rossz irányt adna @why_clip, ezért a sarokpont felé húzom egészen a közeli síkig. A mélységi távolságokból számolom, hogy a sarokpont felé mekkora $t$ paraméternél éri el a síkot, és a szomszédos pontot $bold(N) + t (bold(C) - bold(N))$-re cserélem.
 
-
-== Numerikus hibák csökkentése
-
 = Mintázat
 
 A Dotted és Patterned görbéknél mintázatot is számolok, és a mintázatoknál két irányba tudok elmenni. Az egyik, hogy az egész mintázatot képernyőtérben számolom, azaz a minták távolságát pixelekben adom meg. Ennek a módszernek az az előnye, hogy akármilyen közel megy a kamera a görbéhez, a minták közötti távolság a képernyőn állandó marad, így a görbe nem tűnhet el két minta között. A problémája az, hogy kis kameramozgásnál is drasztikusan elmozdulhatnak a minták (@screen_space_pattern). Ennek az az oka, hogy az ívhosszat a görbe elejétől mérem: ha a görbe eleje a vetítés után kicsit elmozdul vagy megnyúlik, akkor a mintázat a görbe teljes hosszán eltolódik, és ez az eltolódás a görbe vége felé halmozódik.
@@ -622,11 +619,53 @@ A pixel shader a koordinátákon kívül néhány, a szegmensen belül állandó
 
 Az $Y < 0$ és az $Y > l$ tartomány nem mindig a görbe vége, lehet egy csatlakozás túlnyúló része is. A Solid görbénél ezt a két szomszédjelző dönti el: ha $Y < 0$ és a kezdőpontnál nincs szomszédos szegmens, akkor a fragmensre az elülső kupak, ha $Y > l$ és a végpontnál nincs szomszéd, akkor a hátsó kupak vonatkozik, minden más esetben a csatlakozás. A Patterned görbénél a szegmens koordinátáját a görbe ívhosszává alakítom: $s = s_bold(A) + Y$, ahol $s_bold(A)$ a kezdőpont képernyőtérbeli ívhossza a prefix sum eredményéből. A fragmens a görbe elé esik, ha $s < 0$, és mögé, ha $s$ nagyobb a görbe utolsó pontjának ívhosszánál. Mivel a vágásnál az ívhosszakat is $t_0$ és $t_1$ paraméterrel interpolálom, $s_bold(A)$ a vágott kezdőpont ívhossza, így a vágott szegmensnél is helyes értéket kapok. Ugyanezt az $s$ értéket használom a mintázat kiszámításához is, ezért a mintázat a szegmensek határán folytonos a görbe középvonala mentén.
 
-// TODO Törések
-
 === Mintázatok szegmensek között
 
-A kiszámított koordináta-rendszereknek van egy problémájuk: ha veszek két egymást követő szegmenst, és megnézem, hogy a közös pontban milyen ívhosszakat kapok, akkor azt látom, hogy a csúcsban nem egyeznek meg. Emiatt a minta láthatóan megtörik, és nem csupán eltorzul.
+A kiszámított koordináta-rendszereknek van egy problémájuk, ha veszek két egymást követő szegmenst, és megnézem, hogy a közös pontban milyen ívhosszakat kapok, akkor azt látom, hogy a csúcsban nem egyeznek meg (@not_matching_local). Emiatt a minta láthatóan megtörik, és nem csupán eltorzul (@pattern_break).
+
+#figure(
+  image("images/not_matching_local.png", width: 90%),
+  caption: [Ha minden szegmens a saját hossz menti koordinátáját kapja, akkor az illesztési élen az értékek nem egyeznek: a külső csúcsban 11 és 9, a belsőben 9 és 11, csak a középvonalon egyeznek meg 10.]
+) <not_matching_local>
+
+#figure(
+  image("images/patternbreak.png", width: 90%),
+  caption: [A görbe mintázata megtörik két szegmens határánál.]
+) <pattern_break>
+
+Az ívhosszat ezért úgy kell módosítanom, hogy a csatlakozásnál a két szegmens ugyanazt az értéket adja. Az eltérés a középvonaltól mért távolsággal arányos. A középvonalon a két szegmens megegyezik, a szél felé egyre nagyobb a különbség, a két oldalon ellentétes előjellel. Legyen $alpha$ a csatlakozás fordulási szöge, amely pozitív, ha a görbe a $bold(n)$ normális oldalára fordul, és legyen $s_bold(B)$ az ívhossz a csatlakozás középpontjában. A csatlakozás élén az $X$ oldalirányú koordinátájú pontban a befutó és a kifutó szegmens ívhossza
+
+$ s_"be" = s_bold(B) - X tan(alpha / 2), quad s_"ki" = s_bold(B) + X tan(alpha / 2), $
+
+a különbségük tehát $2 X tan(alpha/2)$. Az ábrán (@not_matching_local) a külső csúcsban 11 és 9, a belsőben 9 és 11 szerepel.
+
+*Nyírás.* A hossz menti koordinátát az oldalirányú koordinátával arányosan módosítom:
+
+$ s' = s_bold(A) + Y + X sigma, quad sigma = (bold(n) dot bold(t)') / (1 + bold(t) dot bold(t)') = tan(alpha / 2). $
+
+A $bold(t)'$ a szomszédos szegmens iránya: a végpontnál a következő szegmensé, a kezdőpontnál az előzőé. Így a végpontnál $sigma_1 = tan(alpha_1/2)$, a kezdőpontnál $sigma_0 = -tan(alpha_0/2)$. A csatlakozás élén ezzel mindkét szegmens $s_bold(B)$-t kapja, vagyis a középvonal értékét, tehát megegyeznek. Az $s'$ izovonalai a szegmensre merőleges egyenesek helyett a szögfelezővel párhuzamosak, mert a nyírással $alpha / 2$ szöggel elforgatom őket. Az $s'$ az $X$ és $Y$ affin függvénye, és a gradiense, $sigma bold(n) + bold(t)$, mindkét szegmensnél ugyanaz: iránya a szögfelezőre merőleges, hossza $sqrt(1 + sigma^2)$. Két affin függvény, amelynek a gradiense megegyezik, és az értékük egy egyenes mentén azonos, mindenhol azonos, ezért a nyírt ívhossz a csatlakozás körül mindenhol ugyanaz, ahol a két csík átfedi egymást. Egyenes haladásnál $sigma = 0$, így a nyírás nem változtat a mintázaton.
+
+*A nyírás kiterjedése.* A $sigma_0$ és a $sigma_1$ nem egyezik meg, ezért a nyírást nem alkalmazhatom végig a szegmensen: a kezdőponthoz a $sigma_0$, a végponthoz a $sigma_1$ tartozik. A nyírással a csík szélén $h |sigma_k|$ értékkel módosítom az ívhosszat, ezért a csatlakozásoknál ekkora, $b_k = h |sigma_k|$ szélességű sávban a teljes nyírást használom, a két sáv között pedig lineárisan átmegyek az egyikből a másikba:
+
+$ w = "sat"((Y - b_0) / (l - b_0 - b_1)), quad s' = s_bold(A) + Y + X ((1 - w) sigma_0 + w sigma_1), $
+
+ahol $"sat"$ az $[0, 1]$ tartományra vágja az értéket. Ha $b_0 + b_1$ nagyobb a szegmens hosszának $0.8$-szeresénél, akkor a két sávot arányosan lecsökkentem, hogy az átmenetre legalább a szegmens ötöde jusson. Egy folytonosan egy irányba forduló görbén a két csatlakozás ugyanarra az oldalra fordul, ezért a definíció miatt $sigma_0$ és $sigma_1$ előjele ellentétes, és a szegmens közepén a nyírás körülbelül eltűnik. A @compensate_affected_area ábra mutatja, hogy a szegmens mely részén melyik nyírást használom.
+
+#figure(
+  image("images/compensate_affected_area.png", width: 90%),
+  caption: [A szegmens koordináta-rendszere és a nyírás hatása. A zöld háromszög a kezdőpontnál, a lila háromszög a végpontnál használt teljes nyírás ($sigma_0$, illetve $sigma_1$) területe, a sárga rész a kettő közötti lineáris átmenet. A vastag vonal a szegmens középvonala, ahol a nyírás nem változtat az ívhosszon.]
+) <compensate_affected_area>
+
+*Vertex shader.* A $sigma_0$ és a $sigma_1$ értéket a vertex shaderben a szegmens saját, vágott, pixelbe vetített pontjaiból számolom, nem a csúcsonkénti sarok alapján, ezért mind az öt csúcs ugyanazt kapja, és `nointerpolation` módon adom tovább. Ehhez a Patterned görbénél mindkét szomszédos pontra szükségem van, a szegmens előttire és utánira is, a Solid görbénél viszont csak a csúcs saját oldalán lévőre. Ha nincs szomszéd, vagy a vágás levágta a szegmens adott végét, a szomszéd helyére a szegmens másik végpontját teszem. Ilyenkor $bold(t)' = -bold(t)$, a nevező nulla, és $sigma = 0$. Ugyanígy nullának veszem a nyírást, ha a görbe majdnem visszafordul ($1 + cos alpha <= 10^(-3)$), és $|sigma|$-t 8-ra korlátozom ($165.7 degree$).
+
+*Pixel shader.* A pixel shaderben a nyírt $s'$ értéket számolom ki a csúcsokból kapott $X$ és $Y$ koordinátából, valamint az $s_bold(A)$, $sigma_0$ és $sigma_1$ állandókból. A csatlakozásoknál a szegmens négyszöge túlnyúlik a sarkon ($Y < 0$ és $Y > l$), ahol a szegmens olyan ívhosszat számolna, amelyet a görbe ott nem fed le. Ezért ha a kezdőpontnál van szomszéd, az $s'$ értéket alulról $s_bold(A)$-ra, ha a végpontnál van szomszéd, felülről $s_bold(A) + l$-re korlátozom, vagyis a szegmens saját ívhossztartományára. A vágással levágott véget is szomszédosnak veszem. A görbe végén nem korlátozom az értéket, mert ott a végkupak az ívhosszon túl is rajzolhat mintázatot.
+
+A nyírás után a két szegmens ívhossza a csatlakozásnál megegyezik, ezért a mintázat nem törik meg (@pattern_break_compensate).
+
+#figure(
+  image("images/pattern_break_compensate.png", width: 80%),
+  caption: [A mintázat a nyírás után folytonos két szegmens határán.]
+) <pattern_break_compensate>
 
 = Összekapcsolt görbék
 
