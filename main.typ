@@ -2,7 +2,7 @@
 
 #let thesis(doc,
   lang: "hu",
-  title : "Sok verejtékkel készült szakdolgozatom címe",
+  title : "Általános célú mintázott térbeli Bézier-görbék masszívan párhuzamos megjelenítése",
   authors: ( (name: "Hallgató Hanga", course: "Programtervező informatikus BSc"),),
   supervisors :( (name:"Dr. Témavezető Tamás", role : "Egyetemi adjunktus"), ),
   department : "Témavezetőm Tanszéke",
@@ -133,7 +133,7 @@
 }
 
 #show: thesis.with(
-  title: "Work-in-progress Typst szakdolgozat sablon",
+  title: "Általános célú mintázott térbeli Bézier-görbék masszívan párhuzamos megjelenítése",
   authors : ((
     name: "Gipsz Jakab",
     course: "Programtervező informatikus BSc"
@@ -155,9 +155,10 @@
 // Mire készül általános implementáció.
 // Teljesítmény számok is lehetnek.
 
-A számítógépes grafika számos területén, például a tervezőprogramokban, a vizualizációban és a játékokban, gyakran kell görbéket megjelenítenünk két és három dimenzióban. Interaktív alkalmazásokban a görbék paraméterei és a kamera helyzete folyamatosan változhat, a görbéktől pedig sokszor nemcsak egyszínű megjelenést, hanem szaggatott vagy pontozott mintázatot is elvárunk. A grafikus API-k és driverek által nyújtott vonalprimitívek erre nem adnak megfelelő eszközt: a viselkedésük API-nként és driverenként eltérhet, például a vonalvastagság nem mindenhol állítható.
+A számítógépes grafika számos területén, például a tervezőprogramokban, a vizualizációban és a játékokban, gyakran kell görbéket megjelenítenünk két és három dimenzióban. Valós idejű alkalmazásokban a görbék paraméterei és a kamera helyzete folyamatosan változhat, a görbéktől pedig sokszor nemcsak egyszínű megjelenést, hanem szaggatott vagy pontozott mintázatot is elvárunk. A grafikus API-k és driverek által nyújtott vonalprimitívek erre nem adnak megfelelő eszközt: a viselkedésük API-nként és driverenként eltérhet, például a vonalvastagság nem mindenhol állítható.
 
-Dolgozatunkban egy általános célú módszert mutatok be a Bézier-görbék megjelenítésére. A görbék térben helyezkednek el, a vastagságukat képernyőtérben, pixelben adjuk meg, így az a kamerától való távolságtól független, és a görbéken mintázatot is megjeleníthetünk, amely a kamera mozgása közben is stabil marad. A megoldás csak olyan eszközökre épül, amelyek minden modern grafikus kártyán és API-ban elérhetők, ezért más grafikus API-kra is könnyen átültethető. A számítások nagy részét a GPU végzi, így a CPU terhelése minimális: 50 000 statikus görbe megjelenítésénél a CPU-idő képkockánként 0 ms, mivel a CPU-nak csak a shadereket kell elindítania. Animált görbéknél a CPU-időt a görbék adatainak feltöltése a GPU-ra határozza meg, ez 50 000 görbénél 0,26 ms. Mivel egy görbe kontrollpoligonja négy darab float3-ból áll, ezért $50000 dot 48 "B"$ adatról van szó, és egy PCIe 3.0 x16 csatlakozás elméleti maximális feltöltési sebessége 15,75 GB/s, így a feltöltés 0,16 ms ideális esetben, ami a mért 0,26 ms 61 százaléka.
+Dolgozatunkban egy általános célú módszert mutatok be a Bézier-görbék megjelenítésére. A görbék térben helyezkednek el, a vastagságukat képernyőtérben, pixelben adjuk meg, így az a kamerától való távolságtól független, és a görbéken mintázatot is megjeleníthetünk, amely a kamera mozgása közben is stabil marad. A bemutatott módszer csak olyan eszközökre épül, amelyek minden modern grafikus kártyán és API-ban elérhetők, ezért más grafikus API-kra is könnyen átültethető. A számítások nagy részét a GPU végzi, például az ívhossz kiszámítását, valamint a geometria előállítását. Az utóbbi miatt a CPU terhelése minimális: 50 000 mozgó, mintázott görbe megjelenítése 0,26 ms CPU- és 4,7 ms GPU-időt igényel. A méréseket NVIDIA GeForce 1060 és AMD Ryzen 5 5500-en végeztem. A CPU-idő a GPU-ra történő feltöltés idejével arányos.
+
 
 //A háromdimenziós jelenetekben megjelenített görbék, például útvonalak, mérővonalak és CAD-rajzok, gyakran képernyőtérben állandó vastagságot, szaggatott vagy pontozott mintázatot és különféle végkupakokat igényelnek. A grafikus API-k vonalprimitívjei ezt csak korlátozottan támogatják, és a működésük API-nként, sőt driverenként is eltérhet. Ami az egyik eszközön működik, az a másikon hiányozhat vagy másképp jelenhet meg.
 
