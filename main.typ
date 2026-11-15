@@ -166,10 +166,7 @@ Dolgozatunkban egy általános célú módszert mutatok be a Bézier-görbék me
 
 = Bevezetés <intro>
 
-// Munkám során ahhoz, hogy a Bézier görbéket megjelenítsem a vonalprimitívet cserélem le, ez alatt azt értem, hogy nem a grafikus API-k által kínált vonalprimitíveket használom. Például: GL_LINE_STRIP, D3DPT_LINESTRIP, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
-// Az utóbbira azért van szükség, mert a vonalprimitíveken erős megkötések vannak, például a grafikus API-k nem garantálják, hogy a vonal szélessége megváltoztatható legyen, a DX11-ben nem is lehet megadni a szélességét és még nem is beszéltünk arról az esetről, amikor mintázatot szeretnénk futtatni a görbe mentén. Valamint mintázatokat sem támogatnak alapból a grafikus API-k.
-
-// Ez egy olyan probléma, amire több megoldás is létezik, de általában mindegyiknak megvan a saját hátránya vagy nem támogatja az összes funkciót, ami számomra szükséges.
+A dolgozatban másod- és harmadfokú Bézier-görbék megjelenítésével foglalkozom térben, pixelben megadott, rögzített vonalvastagsággal, úgy, hogy a kamera mozoghat, a görbék pedig képkockáról képkockára változhatnak. Először összefoglalom a Bézier-görbék tulajdonságait, majd bemutatom a megjelenítésükre eddig használt módszereket.
 
 == Bézier-görbék
 // https://onlinelibrary.wiley.com/doi/10.1155/2013/171392
@@ -207,17 +204,17 @@ $ bold(B)'(t) = 3 [(1-t)^2 (bold(P)_1 - bold(P)_0) + 2(1-t)t (bold(P)_2 - bold(P
 
 A végpontokban ez $bold(B)'(0) = 3(bold(P)_1 - bold(P)_0)$ és $bold(B)'(1) = 3(bold(P)_3 - bold(P)_2)$, vagyis a görbe érintője a végpontokban a szomszédos kontrollponton halad át.
 
-Kutatásom során Bézier-görbék megjelenítésével foglalkoztam, azon belül is a harmadfokú Bézier-görbékkel, mivel:
-- A Bézier-görbék a legelterjedtebbek a CAD- és a grafikai tervezőszoftverekben.
-- Az SVG specifikációja a másod- és a harmadfokú Bézier-görbéket tartalmazza.
-- Tetszőleges n-ed fokú polinom felírható n-ed fokú Bézier-görbe kontrollpontjaival.
-- A pontok interpolálására használt Catmull-Rom-, Hermite- és B-spline szakaszai megegyeznek egy-egy harmadfokú Bézier-görbével.
+Kutatásom során Bézier-görbék megjelenítésével foglalkoztam, azon belül is a harmadfokú Bézier-görbékkel, mivel
+- a Bézier-görbék a legelterjedtebbek a CAD- és a grafikai tervezőszoftverekben;
+- az SVG specifikációja a másod- és a harmadfokú Bézier-görbéket tartalmazza;
+- tetszőleges $n$-ed fokú polinom felírható $n$-ed fokú Bézier-görbe kontrollpontjaival;
+- a pontok interpolálására használt Catmull-Rom-, Hermite- és B-spline szakaszai megegyeznek egy-egy harmadfokú Bézier-görbével.
 
-A Bézier-görbéknek további hasznos tulajdonságaik is vannak:
-- Konvex burok tulajdonság: a görbe minden pontja a kontrollpontok konvex burkán belül van.
-- Affin invariancia: affin transzformáció után a görbe megegyezik azzal a görbével, amelyet a transzformált kontrollpontokból építek fel.
-- Végpont-interpoláció: a görbe kezdőpontja az első, végpontja az utolsó kontrollponttal egyezik meg.
-- Fokszámemelés: egy n-ed fokú Bézier-görbét pontosan fel tudok írni n+1-ed fokú Bézier-görbeként.
+A Bézier-görbéknek az alábbi további hasznos tulajdonságaik is vannak.
+- *Konvex burok tulajdonság.* A görbe minden pontja a kontrollpontok konvex burkán belül van.
+- *Affin invariancia.* Affin transzformáció után a görbe megegyezik azzal a görbével, amelyet a transzformált kontrollpontokból építek fel.
+- *Végpont-interpoláció.* A görbe kezdőpontja az első, végpontja az utolsó kontrollponttal egyezik meg.
+- *Fokszámemelés.* Egy $n$-ed fokú Bézier-görbét pontosan fel tudok írni $(n+1)$-ed fokú Bézier-görbeként.
 
 A fokszámemelés miatt elég a harmadfokú Bézier-görbék megjelenítését megvalósítanom: a lineáris és a másodfokú görbét harmadfokú alakra írom át, és ugyanúgy rajzolom ki.
 
@@ -238,12 +235,12 @@ QuadraticToCubic(P0, P1, P2) {
 
 == Jelenlegi módszerek
 
-Háromdimenziós görbék megjelenítésére több módszert vizsgáltam meg, ezeket három kategóriába sorolom: vonalprimitívre, vektorgrafikára és generált geometriára épülő módszerek. Mindegyiknél a következő szempontokat vizsgálom:
-- Távolságtól független vastagság, azaz a görbe vastagságát pixelekben adhatom meg.
-- Változtatható vastagság, azaz a vastagság értékét módosíthatom.
-- Mintázatok támogatása, azaz a görbe nemcsak egy színből áll, hanem szaggatott vagy pontozott görbét is megjeleníthetek.
-- Térbeli használat, azaz a görbét nemcsak egy síkban adhatom meg.
-- Portabilitás
+Háromdimenziós görbék megjelenítésére több módszert vizsgáltam meg, ezeket három kategóriába sorolom: vonalprimitívre, vektorgrafikára és generált geometriára épülő módszerek. Mindegyiknél azt vizsgálom, hogy
+- a vastagság független-e a távolságtól, azaz megadhatom-e pixelekben;
+- változtatható-e a vastagság;
+- támogatja-e a mintázatokat, azaz meg tudok-e jeleníteni szaggatott vagy pontozott görbét is;
+- használható-e térben, azaz nemcsak egy síkban adhatom-e meg a görbét;
+- hordozható-e más grafikus API-kra.
 Más szempontok is vannak, például a színek és az átlátszóság kezelése, az élsimítás és a teljesítmény, de ezekre csak néhány helyen térek ki ebben a fejezetben.
 
 === Vonalprimitíven alapuló módszerek
@@ -281,14 +278,14 @@ Vonalprimitívvel egyenes szakaszokat rajzolhatok: ilyen például a `GL_LINE_ST
 
 Az ábrán (@vs_segment_curve) olyan hiba is látszik, hogy a szaggatások a görbületnél rossz irányba állnak, és keresztezik egymást. Ez azért történik, mert a görbe egyenes szakaszokból áll, és a szaggatásos mintázat merőleges ezekre a szakaszokra.
 
-Összefoglalva, a vonalprimitíveknek három nagy hátránya van a görbék rajzolásában:
-- A vonalvastagság nem biztosított: OpenGL core profilban az 1-nél nagyobb vastagság nem biztos, hogy működik, Vulkanban a vastag vonalhoz a választható `wideLines` funkcióra van szükség, a DX11-ben pedig egyáltalán nem adhatok meg vonalvastagságot.
-- A vertex és a fragment shader szempontjából a vonalnak nincs vastagsága. A vonal hossza mentén interpolált értékeket adhatok meg, a szélesség mentén nem. Ezért csak különböző szaggatásokat hozhatok létre, a görbe végét viszont nem tudom lekerekíteni.
-- Ha vastag vonalakból állítom össze a solid görbét, az nem szép (@line_solid_curve), mert a szegmenseket a két végpontjukon túl nem tudom meghosszabbítani, ezért az illesztéseknél rések maradnak. Ha a szegmensek végpontjait eltolom, akkor a sarkok túlnyúlnak a görbén.
+Összefoglalva, a vonalprimitíveknek az alábbi három nagy hátránya van a görbék rajzolásában.
++ A vonalvastagság nem biztosított: OpenGL core profilban az 1-nél nagyobb vastagság nem biztos, hogy működik, Vulkanban a vastag vonalhoz a választható `wideLines` funkcióra van szükség, a DX11-ben pedig egyáltalán nem adhatok meg vonalvastagságot.
++ A vertex és a fragment shader szempontjából a vonalnak nincs vastagsága. A vonal hossza mentén interpolált értékeket adhatok meg, a szélesség mentén nem. Ezért csak különböző szaggatásokat hozhatok létre, a görbe végét viszont nem tudom lekerekíteni.
++ Ha vastag vonalakból állítom össze a solid görbét, az nem szép (@line_solid_curve), mert a szegmenseket a két végpontjukon túl nem tudom meghosszabbítani, ezért az illesztéseknél rések maradnak. Ha a szegmensek végpontjait eltolom, akkor a sarkok túlnyúlnak a görbén.
 
 #figure(
   image("images/vk_curve_thick_solid.png",width:80%),
-  caption: [Vastag görbe vonalprimitívekkel kirajzolva]
+  caption: [Vastag görbe vonalprimitívekkel kirajzolva. A külső oldalon rések maradnak a szegmensek csatlakozásainál]
 ) <line_solid_curve>
 
 // One large after every one
@@ -465,10 +462,10 @@ $ z, quad w - z. $
 Jelölje $D_k (bold(p))$ a $bold(p)$ pont $k$-adik síktól mért távolságát, azaz a fenti hat kifejezés közül a $k$-adikat. Mivel ezek a távolságok a vágási térben, azaz a homogén koordinátákban, a $w$-vel való osztás előtt lineárisak, a szegmens $bold(A)$ és $bold(B)$ végpontja között $bold(A) + t (bold(B) - bold(A))$ alakban mozogva a $k$-adik sík távolsága is lineárisan változik $D_k (bold(A))$ és $D_k (bold(B))$ között. A síkot ott metszi a szegmens, ahol
 $ t_k = -(D_k (bold(A))) / (D_k (bold(B)) - D_k (bold(A))). $
 
-A vágás a Liang--Barsky-algoritmust követi @liang-barsky:
-- Ha minden $k$-ra $D_k (bold(A)) >= 0$ és $D_k (bold(B)) >= 0$, akkor a szegmenst nem kell vágnom.
-- Ha van olyan $k$, amelyre $D_k (bold(A)) < 0$ és $D_k (bold(B)) < 0$, akkor a szegmenst eldobom: a csúcs pozíciója NaN lesz, így a raszterizáló az összes háromszögét eldobja. Ugyanígy dobom el a szegmenst akkor is, ha valamelyik végpontja már NaN.
-- Különben a $D_k (bold(B)) - D_k (bold(A)) > 0$ síkok $t_k$ értékei közül a legnagyobb adja a $t_0$, a $D_k (bold(B)) - D_k (bold(A)) < 0$ síkoké közül a legkisebb a $t_1$ értéket, $t_0 >= 0$ és $t_1 <= 1$ mellett. Ha $t_0 >= t_1$, akkor nincs olyan $t$, amelyre minden $D_k$ nemnegatív, ezért ezt a szegmenst is eldobom. Egyébként az új végpontok $bold(A) + t_0 (bold(B) - bold(A))$ és $bold(A) + t_1 (bold(B) - bold(A))$.
+A vágás a Liang--Barsky-algoritmust követi @liang-barsky. A szegmens helyzetétől függően három eset lehetséges.
++ Ha minden $k$-ra $D_k (bold(A)) >= 0$ és $D_k (bold(B)) >= 0$, akkor a szegmenst nem kell vágnom.
++ Ha van olyan $k$, amelyre $D_k (bold(A)) < 0$ és $D_k (bold(B)) < 0$, akkor a szegmenst eldobom: a csúcs pozíciója NaN lesz, így a raszterizáló az összes háromszögét eldobja. Ugyanígy dobom el a szegmenst akkor is, ha valamelyik végpontja már NaN.
++ Különben a $D_k (bold(B)) - D_k (bold(A)) > 0$ síkok $t_k$ értékei közül a legnagyobb adja a $t_0$, a $D_k (bold(B)) - D_k (bold(A)) < 0$ síkoké közül a legkisebb a $t_1$ értéket, $t_0 >= 0$ és $t_1 <= 1$ mellett. Ha $t_0 >= t_1$, akkor nincs olyan $t$, amelyre minden $D_k$ nemnegatív, ezért ezt a szegmenst is eldobom. Egyébként az új végpontok $bold(A) + t_0 (bold(B) - bold(A))$ és $bold(A) + t_1 (bold(B) - bold(A))$.
 
 A homogén koordinátákban végzett lineáris interpoláció a vetítés után is a szegmens egy pontját adja, ezért a vágott végpontokat ugyanúgy oszthatom el $w$-vel, mint az eredetieket. A többi görbe mentén interpolált értékeket, például a színt és az ívhosszokat is $t_0$ és $t_1$ paraméterrel interpolálom a két végpont között.
 
@@ -580,7 +577,7 @@ $ Y = cases(-h (bold(o) dot bold(d)_"be") & "a kezdőpont csúcsainál,", l + h 
 
 Mindkét esetben $h (bold(o) dot bold(d)_"be")$ azt adja meg, hogy a csúcs mennyivel nyúlik túl a szegmens saját végén. Az overlap esetben és a görbe végén $bold(o) dot bold(d)_"be" = 1$, ezért ott $Y = -h$, illetve $Y = l + h$, a meghosszabbított részben tehát $Y < 0$, illetve $Y > l$.
 
-Az oldalirányú koordináta ugyanígy $X = h (bold(o) dot bold(r)_"be")$ a kezdőpont és $X = -h (bold(o) dot bold(r)_"be")$ a végpont csúcsainál. A 0--3. csúcsnál azonban ezt nem kell kiszámolnom, mert a háromszögelés minden esetében $bold(o) dot bold(r)_"be" = s$:
+Az oldalirányú koordináta ugyanígy $X = h (bold(o) dot bold(r)_"be")$ a kezdőpont és $X = -h (bold(o) dot bold(r)_"be")$ a végpont csúcsainál. A 0--3. csúcsnál azonban ezt nem kell kiszámolnom, mert a háromszögelés összes esetében $bold(o) dot bold(r)_"be" = s$, ahogy az alábbi esetek mutatják.
 - Miter csatlakozásnál $bold(o) = s bold(m)$, és mivel $bold(r)_"be" dot bold(r)_"ki" = bold(d)_"be" dot bold(d)_"ki" = cos alpha$, ezért $bold(m) dot bold(r)_"be" = (1 + cos alpha) / (1 + cos alpha) = 1$. A miter csúcs tehát a két szegmens eltolt szélének metszéspontjaként mindkét szegmens szélére esik.
 - Hegyes szögnél a belső csúcs ugyanez a miter csúcs, a külső csúcs eltolása $-sigma bold(r)_"be" + tan(alpha/4) bold(d)_"be"$, amelynek vetülete $-sigma$, vagyis a külső oldal előjele.
 - Overlap esetben és a görbe végén $bold(o) = bold(d)_"be" + s bold(r)_"be"$, amelynek vetülete $s$.
@@ -760,6 +757,12 @@ A nyírás után a két szegmens ívhossza a csatlakozásnál megegyezik, ezért
 
 //==================================
 #set heading(numbering: none)
+
+= Köszönetnyilvánítás
+
+Köszönettel tartozom témavezetőmnek, Bálint Csabának a konzultációkért és a szakmai támogatásért.
+
+A projekt a CAE Hungary Kft és a Pázmány-Eötvös Természettudományi Információs Alapítvány támogatásával valósult meg.
 
 = Appendix
 
