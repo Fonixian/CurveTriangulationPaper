@@ -155,14 +155,9 @@
 // Mire készül általános implementáció.
 // Teljesítmény számok is lehetnek.
 
-A számítógépes grafika számos területén, például a tervezőprogramokban, a vizualizációban és a játékokban, gyakran kell görbéket megjelenítenünk két és három dimenzióban. Valós idejű alkalmazásokban a görbék paraméterei és a kamera helyzete folyamatosan változhat, a görbéktől pedig sokszor nemcsak egyszínű megjelenést, hanem szaggatott vagy pontozott mintázatot is elvárunk. A grafikus API-k és driverek által nyújtott vonalprimitívek erre nem adnak megfelelő eszközt: a viselkedésük API-nként és driverenként eltérhet, például a vonalvastagság nem mindenhol állítható.
+A számítógépes grafika számos területén, például tervezőprogramokban, adatvizualizáció során és játékokban, gyakran kell két- és háromdimenziós görbéket megjelenítenünk. Valós idejű alkalmazásokban a görbék paraméterei és a kamera helyzete folyamatosan változhat, a görbéktől pedig sokszor nemcsak egyszínű megjelenést, hanem szaggatott vagy pontozott mintázatot is elvárunk. A grafikus API-k által nyújtott vonalprimitívek erre nem adnak megfelelő eszközt: a viselkedésük API-nként és driverenként is eltérhet, viszont a meglévő platformfüggetlen algoritmusok vagy csak bizonyos görbéket támogatnak, vagy nem túl gyorsak.
 
-Dolgozatunkban egy általános célú módszert mutatok be a Bézier-görbék megjelenítésére. A görbék térben helyezkednek el, a vastagságukat képernyőtérben, pixelben adjuk meg, így az a kamerától való távolságtól független, és a görbéken mintázatot is megjeleníthetünk, amely a kamera mozgása közben is stabil marad. A bemutatott módszer csak olyan eszközökre épül, amelyek minden modern grafikus kártyán és API-ban elérhetők, ezért más grafikus API-kra is könnyen átültethető. A számítások nagy részét a GPU végzi, például az ívhossz kiszámítását, valamint a geometria előállítását. Az utóbbi miatt a CPU terhelése minimális: 50 000 mozgó, mintázott görbe megjelenítése 0,26 ms CPU- és 4,7 ms GPU-időt igényel. A méréseket NVIDIA GeForce 1060 és AMD Ryzen 5 5500-en végeztem. A CPU-idő a GPU-ra történő feltöltés idejével arányos.
-
-
-//A háromdimenziós jelenetekben megjelenített görbék, például útvonalak, mérővonalak és CAD-rajzok, gyakran képernyőtérben állandó vastagságot, szaggatott vagy pontozott mintázatot és különféle végkupakokat igényelnek. A grafikus API-k vonalprimitívjei ezt csak korlátozottan támogatják, és a működésük API-nként, sőt driverenként is eltérhet. Ami az egyik eszközön működik, az a másikon hiányozhat vagy másképp jelenhet meg.
-
-//Szakdolgozatomban egy olyan módszert mutatok be Bézier-görbék megjelenítésére, amely nem a vonalprimitívekre épül, hanem a görbék geometriáját GPU-n állítom elő. Ehhez csak olyan általános eszközöket használok, mint a vertex, pixel és compute shaderek, amelyek minden modern grafikus API-ban elérhetők. Így a módszer nem függ egy adott API bővítményeitől vagy a driver implementációjától. A számítások nagy részét a GPU végzi, így a CPU munkáját tudom minimalizálni. Ennek köszönhetően a CPU-használat a görbék számától és alakjától függetlenül alacsony marad.
+Dolgozatomban egy általános célú módszert mutatok be térbeli Bézier-görbék  valós idejű megjelenítésére. A görbéken mintázatok jelenthetőek meg, a vonal vastagsága változtatható és a kamerától függetlenül, képernyőtérben megadható. A bemutatott módszer csak olyan eszközökre épül, amelyek minden modern grafikus kártyán elérhetők. A számítások nagy részét, például az ívhossz kiszámítását és a geometria előállítását, a GPU végzi, mivel feltételezem, hogy a kamera és a görbék képkockáról képkockára változnak. A CPU  feladata mindössze a GPU-memória lefoglalása, az adatok feltöltése és a shaderek meghívása, így a megjelenés hatékony: 50 000 mozgó, mintázott görbe megjelenítése 0,26 ms CPU- és 4,7 ms GPU-időt igényel. A CPU-idő a GPU-ra történő feltöltés idejével arányos. A méréseket NVIDIA GeForce GTX 1060 videokártyán és AMD Ryzen 5 5500 processzoron végeztem.
 
 = Bevezetés <intro>
 
@@ -666,6 +661,24 @@ A nyírás után a két szegmens ívhossza a csatlakozásnál megegyezik, ezért
 ) <pattern_break_compensate>
 
 = Összekapcsolt görbék
+
+Szeretném, hogy a módszer spline-okkal is működjön. Egy Catmull-Rom- vagy Hermite-spline sok harmadfokú Bézier-görbéből áll, ezeknek viszont egyetlen folytonos vonalként kell megjelenniük: közös vastagsággal, kupakokkal csak a spline két végén, és olyan mintázattal, amely az illesztéseken megszakítás nélkül halad át. Ezért a görbe megadásakor azt is jelezhetem, hogy a görbe az előzőleg hozzáadott görbe folytatása. Az így összekapcsolt görbék láncot alkotnak: a lánc görbéi egymás után helyezkednek el a bufferekben, a görbetípust pedig a lánc első görbéje dönti el az egész láncra. Felteszem, hogy a csatlakozó görbék osztoznak a csatlakozási ponton, azaz az előző görbe $bold(P)_3$ kontrollpontja megegyezik a következő görbe $bold(P)_0$ kontrollpontjával. Az összekapcsolást két helyen kell külön kezelnem: a geometria előállításánál és a mintázat kiszámításánál.
+
+== Folytonos geometria
+
+Minden görbéhez a felbontásának megfelelő számú mintavételi pont tartozik, akkor is, ha összekapcsolt. A csatlakozási pontot ezért mindkét görbe mintavételezi, az előző görbe a $t = 1$, a következő a $t = 0$ paraméternél, és a két másolat ugyanott van a térben. A kettő közötti nulla hosszú szegmenst nem rajzolom ki: azt a szegmenst, amely egy görbe utolsó mintavételi pontján indulna, eldobom, így a lánc szegmensei pontosan úgy követik egymást, mint egy görbén belül.
+
+A háromszögeléshez a sarkon túli szomszédos pontra is szükségem van. A lánc belsejében lévő csatlakozásnál ez a pont már a szomszédos görbén van, és mivel a csatlakozás kétszer szerepel, nem az $i-1$, illetve $i+2$, hanem az $i-2$, illetve $i+3$ indexű mintát veszem, és a szomszédos görbe saját paraméterezésével értékelem ki. Így a szomszéd pontosan az a mintavételi pont, amelyet a szomszédos szegmens a saját sarkaként használ: a csatlakozás két oldala ugyanazokból a vetített pontokból számolja a háromszögelést, ezért a sarok ugyanúgy illeszkedik, mint egy görbén belüli sarok.
+
+Minden mintavételi ponthoz a görbe indexe mellett két jelzőbitet is tárolok: folytatódik-e a vonal a szegmens kezdete előtt, illetve a vége után. A lánc belső csatlakozásainál a vonal folytatódik, ezért a pixel shader oda csatlakozást rajzol, kupakot pedig csak a lánc két végére. A csatlakozásnál érintőfolytonosságot nem követelek meg: a lánc belső csatlakozása ugyanolyan sarok, mint a görbén belüliek, és a háromszögelés minden esete ott is ugyanúgy működik.
+
+== Folytonos mintázat
+
+A mintázathoz az ívhossznak a teljes láncon kell végigfutnia. A szegmentált prefix sum újraindítását jelző bitet ezért csak a láncok első görbéjének első pontjára teszem, az összekapcsolt görbék első pontjára nem, így a világ- és a képernyőtérbeli ívhossz a lánc elejétől mérve, a csatlakozásokon át folytonosan nő. A csatlakozási pont két másolata közötti szegmens hossza nulla, az összegen tehát nem változtat.
+
+A minták középpontjai így a lánc közös rácsára kerülnek: a $k$-adik középpont a lánc elejétől mért $k dot d$ ívhossznál van, a $d$ mintatávolságot pedig a láncon belül egységesnek veszem. Minden görbe a saját ívhossztartományába eső középpontokat számolja ki, ahogyan a Mintázatok kiszámolása szakaszban leírtam, és a görbénkénti $N(s_"utolsó") - N(s_"első")$ darabszámok a láncon összegezve éppen a lánc teljes mintaszámát adják: minden középpont pontosan egy görbéhez kerül. Mivel a lánc görbéi a mintatömbben is egymás után következnek, a lánc középpontjai egyetlen folytonos, ívhossz szerint rendezett tartományt alkotnak, és a pixel shader a görbehatáron átnyúló szomszédos középpontot is a szomszédos indexen találja meg. A lánc utolsó középpontját külön megjelölöm, így a lánc végén álló görbe nem olvas át a következő lánc középpontjaira.
+
+A csatlakozásoknál a mintázat folytonosságát ugyanaz a nyírás biztosítja, mint a görbén belüli sarkoknál: a $sigma$ értékét a szomszédos görbe mintavételi pontjából számolom, ezért a minta a lánc belső csatlakozásain sem törik meg. Mivel a belső csatlakozás mindkét oldalán van szomszédos szegmens, az ívhosszat ott a szegmens saját tartományára korlátozom, a görbevég esete pedig csak a lánc két végén fordulhat elő.
 
 = Mérések
 
