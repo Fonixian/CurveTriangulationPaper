@@ -11,3 +11,11 @@ liang-barsky:
         title: ACM Transactions on Graphics
         volume: 3
         issue: 1
+
+canton-rational-complex:
+    type: Article
+    title: Rational complex Bézier curves
+    author: ["Cantón, A.", "Fernández-Jambrina, L.", "Vázquez-Gallo, M. J."]
+    date: 2025-07-31
+    url: https://arxiv.org/abs/2507.23485
+    note: "arXiv:2507.23485"

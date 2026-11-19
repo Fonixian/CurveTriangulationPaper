@@ -685,15 +685,52 @@ A csatlakozásoknál a mintázat folytonosságát ugyanaz a nyírás biztosítja
 
 = Hibák
 
+
+
 == Összefoglalás
 
 = Fejlesztési lehetőségek
 
-== Mesh shader
+A módszert több irányba is tovább lehetne fejleszteni. Ezeket nem valósítottam meg, mert olyan eszközt igényelnek, amely nem mindenhol elérhető, vagy további feltételezéseket kívánnak a használt görbékről.
 
-== Compute raster
+== Fix méretű görbék
 
-== "Adaptív" felbontás
+A kutatásom során azt tapasztaltam, hogy a görbék megjelenítéséhez 16–32 helyen elég kiértékelni a görbét ahhoz, hogy a szegmensek ne látszódjanak. A jelenlegi módszerben egyetlen rajzolási paranccsal rajzolom ki az összes görbét. Emiatt fel kell töltenem egy segédbuffert, amely megadja, hogy az $n$-edik csúcs melyik görbéhez tartozik, és a $t$ paraméter kiszámításához azt is ki kell olvasnom, hogy mekkora az adott görbe felbontása.
+
+Ezért minden vertex shader-hívásban extra memóriaolvasást végzek, sőt indirekt olvasásokat is: egy memóriaolvasás eredménye alapján olvasok újabb memóriát (`SegmentMap` → `CurveIndices`, `CurveControlPoints`). Az összes compute shaderben is kezelnem kell, hogy a görbék mérete nem fix.
+
+Ha a görbék méretét rögzítem, például harminckettőre, akkor a vertex shader az `InstanceID`-ból és a `VertexID`-ból közvetlenül megkapja, hogy melyik görbe kontrollpontjaira van szüksége, és a $t$ paraméterhez sem kell a görbe felbontását átadnom. A compute shaderekben a munkát egyenletesebben oszthatom el, a szegmentált prefix sum pedig kihasználhatja, hogy a görbék fix méretűek, ezért előre tudom, hol kell újraindítani az összeget. Így a memóriahasználat és a sávszélesség-igény is csökken.
+
+Két külön esetet viszont meg kell vizsgálnom: a harminckettőnél több és a harminckettőnél kevesebb kiértékelést igénylő görbét. Ha a görbéhez harminckettőnél több kiértékelési pont kell, akkor a Bézier-görbét több kisebb Bézier-görbére oszthatom. Ha kevesebb, akkor is harminckét helyen kell kiértékelnem, ezért a módszer nem hatékony kis görbületű vagy egyenes görbéknél. Emiatt nem valósítottam meg, mivel az alacsony vagy nagy felbontású görbék megjelenítésére nem hatékony.
+
+== Mesh shaderek
+
+A mesh shader a vertex-, a tessellation- és a geometria shader szakaszt helyettesítő, programozható szakasz. A compute shaderhez hasonlóan szálcsoportokban fut, és egy szálcsoport közösen állít elő egy kisebb csúcs- és háromszögcsoportot, egy meshletet, amelyet közvetlenül a raszterizálónak ad át. A mesh shader előtt opcionálisan futhat egy amplification shader (Vulkanban task shader), amely eldönti, hogy hány mesh shader szálcsoport induljon el.
+
+A mostani vertex shaderekben ugyanazt többször is kiszámolom: a görbe kiértékelt pontjait, a vektorokat és a szögeket, és két egymást követő szegmensnek két csúcsa is megegyezik. Ha a görbék felbontását is rögzítem, akkor olyan feladatot kapok, amelyre a mesh shaderek jól illeszkednek: egy szálcsoport például egy görbét dolgoz fel, minden pontot egyszer értékel ki, és az eredményt megosztott memórián keresztül adja tovább a csúcsoknak.
+
+A mesh shaderekkel más optimalizációkat is el tudnék végezni. Mielőtt kirajzolok egy görbét, a kontrollpontok és a konvex burok tulajdonság alapján eldönthetem, hogy a görbe látható-e, és ha nem, az egészet eldobhatom. Ki tudnám számolni a görbének azt a részét is, amely teljes egészében a kamera látógúláján belül van, így a fix számú kiértékelési pont mind a látható részre esne, és egy meshlethez tartozó összes csúcsot egyszerre tudnám kiszámolni.
+
+A módszer nagy hátránya, hogy nem minden videokártya és grafikus API támogatja. Például DX11 egyáltalán nem támogat mesh shadereket.
+
+== Racionális Bézier-görbék
+
+A racionális Bézier-görbe minden $bold(P)_i$ kontrollponthoz egy $w_i > 0$ súlyt is rendel:
+
+$ bold(B)(t) = (sum_(i=0)^n b_(i,n)(t) w_i bold(P)_i) / (sum_(i=0)^n b_(i,n)(t) w_i). $
+
+Ha minden súly egy, akkor a nevező is egy, és a közönséges Bézier-görbét kapom vissza. A görbét úgy is kiszámolhatom, hogy a kontrollpontokat homogén koordinátákban, $(w_i bold(P)_i, w_i)$ alakban adom meg, ezekből közönséges Bézier-görbét számolok, majd a kapott pont első koordinátáit elosztom az utolsóval, a $w$ koordinátával. Az eredmény éppen a fenti képlet @canton-rational-complex.
+
+A perspektív vetítés ugyanígy működik. A kontrollpontok vágási koordinátái $(x_i, y_i, z_i, w_i)$ alakúak: ezekből közönséges Bézier-görbét számolok, majd a kapott ponton elvégzem a perspektív osztást. A vetített görbe ezért racionális Bézier-görbe, amelynek kontrollpontjai a vetített $(x_i \/ w_i, y_i \/ w_i)$ pontok, súlyai pedig a $w_i$ értékek @canton-rational-complex. Ez csak akkor igaz, ha a kontrollpontok a kamera előtt vannak, vagyis $w_i > 0$. A vetített kontrollpontok tehát a vetített görbének is kontrollpontjai, ezért a vertex shaderben elég két dimenzióban számolnom, a súlyokkal együtt.
+
+Ennek a legnagyobb előnye, hogy olyan $t$ értékeknél értékelhetem ki a görbét, amelyeknél a vetített szegmensek közel egyenlő hosszúak. Közönséges Bézier-görbénél a $t$ szerint egyenletes kiértékelés után a vetített pontok nem biztos, hogy egyenlő távolságra vannak egymástól, például ha a görbe a kamera felé halad: a világtérben jól megválasztott pontok a vetítés után már nem lesznek jók. Ezenkívül másodfokú racionális Bézier-görbékkel kúpszeleteket is le tudok írni, például köríveket, ellipsziseket és hiperbolákat, amelyeket a közönséges Bézier-görbe csak közelíteni tud.
+
+Ezt azért vetettem el, mert elsősorban másod- és harmadfokú görbék megjelenítésével foglalkoztam, a racionális Bézier-görbék pedig extra számítást igényelnek. A jobb paraméterválasztáshoz, vagyis a $t$ értékek kiszámolásához ráadásul vagy külön shaderben kell előre kiszámolnom az értékeket, vagy mesh shadereket kell használnom, hogy a számítás ne ismétlődjön minden csúcsnál.
+
+
+// END
+
+
 
 // További részletek a @intro -ben és a @telepítés -ben.
 
